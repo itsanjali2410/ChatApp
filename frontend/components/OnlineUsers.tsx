@@ -64,7 +64,7 @@ export default function OnlineUsers({ currentChatId, onUserClick }: OnlineUsersP
     if (diffInMinutes < 1) return 'Just now';
     if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
     if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
-    return date.toLocaleDateString();
+    return date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
   };
 
   if (loading) {

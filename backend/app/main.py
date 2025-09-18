@@ -166,9 +166,10 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
     # Set user as online when they connect
     from .services.user_service import update_user_by_id
     from datetime import datetime
+    from zoneinfo import ZoneInfo
     update_user_by_id(user_id, {
         "is_online": True,
-        "last_seen": datetime.utcnow()
+        "last_seen": datetime.now(ZoneInfo("Asia/Kolkata"))
     })
     
     try:
@@ -215,7 +216,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
         # Set user as offline when they disconnect
         update_user_by_id(user_id, {
             "is_online": False,
-            "last_seen": datetime.utcnow(),
+            "last_seen": datetime.now(ZoneInfo("Asia/Kolkata")),
             "is_typing": False,
             "current_chat_id": None
         })

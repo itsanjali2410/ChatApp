@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 class User(BaseModel):
     username: str
@@ -8,7 +9,7 @@ class User(BaseModel):
     organization_id: Optional[str] = None
     password: str
     role: str = "user"
-    created_at: datetime = datetime.utcnow()
+    created_at: datetime = datetime.now(ZoneInfo("Asia/Kolkata"))
     
     # Profile fields
     profile_picture: Optional[str] = None

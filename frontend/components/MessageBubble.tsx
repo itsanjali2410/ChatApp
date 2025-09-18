@@ -214,7 +214,19 @@ export default function MessageBubble({ message, isSelf, isTemp = false }: Messa
           isSelf ? 'text-green-100' : 'text-gray-500'
         }`}>
           <span className="flex items-center space-x-1">
-            <span>{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            <span>{(() => {
+              const timestamp = new Date(message.timestamp);
+              console.log(`MessageBubble timestamp: ${message.timestamp}, parsed: ${timestamp}, local time: ${timestamp.toLocaleTimeString('en-IN', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                timeZone: 'Asia/Kolkata'
+              })}`);
+              return timestamp.toLocaleTimeString('en-IN', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                timeZone: 'Asia/Kolkata'
+              });
+            })()}</span>
             {isSelf && (
               <svg className="w-3 h-3 ml-1" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />

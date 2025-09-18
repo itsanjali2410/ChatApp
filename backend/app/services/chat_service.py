@@ -8,7 +8,7 @@ chats_collection = db["chats"]
 
 def create_chat(chat: Chat) -> str:
     chat_dict = chat.dict()
-    chat_dict["created_at"] = datetime.utcnow()
+    chat_dict["created_at"] = datetime.now(ZoneInfo("Asia/Kolkata"))
     result = chats_collection.insert_one(chat_dict)
     return str(result.inserted_id)
 

@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 from enum import Enum
+from zoneinfo import ZoneInfo
 
 class MessageStatus(str, Enum):
     sent = "sent"
@@ -24,4 +25,4 @@ class ChatMessage(BaseModel):
     message_type: str  # "text", "image", "file"
     attachment: Optional[FileAttachment] = None
     status: MessageStatus = MessageStatus.sent
-    timestamp: datetime = datetime.utcnow()
+    timestamp: datetime = datetime.now(ZoneInfo("Asia/Kolkata"))

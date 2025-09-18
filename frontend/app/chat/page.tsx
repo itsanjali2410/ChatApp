@@ -246,6 +246,7 @@ export default function ChatPage() {
       try {
         const msgs = await api.get(`/messages/chat/${activeChat.id}`);
         console.log("Polled messages:", msgs.data);
+        console.log("First message timestamp:", msgs.data[0]?.timestamp);
         
         // Sort messages by timestamp to ensure correct order
         const sortedMessages = msgs.data.sort((a: any, b: any) => 
@@ -644,14 +645,19 @@ export default function ChatPage() {
                           if (chatMessages.length > 0) {
                             const lastMessage = chatMessages[chatMessages.length - 1];
                             if (lastMessage && lastMessage.timestamp) {
-                              return new Date(lastMessage.timestamp).toLocaleTimeString([], { 
+                              return new Date(lastMessage.timestamp).toLocaleTimeString('en-IN', { 
                                 hour: '2-digit', 
-                                minute: '2-digit' 
+                                minute: '2-digit',
+                                timeZone: 'Asia/Kolkata'
                               });
                             }
                           }
                         }
-                        return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        return new Date().toLocaleTimeString('en-IN', { 
+                          hour: '2-digit', 
+                          minute: '2-digit',
+                          timeZone: 'Asia/Kolkata'
+                        });
                       })()}
                     </p>
                   </div>

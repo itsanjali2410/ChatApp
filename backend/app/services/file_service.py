@@ -5,6 +5,7 @@ from fastapi import UploadFile, HTTPException
 from PIL import Image
 import shutil
 from typing import Dict, Any
+from zoneinfo import ZoneInfo
 
 # Create uploads directory if it doesn't exist
 UPLOAD_DIR = "uploads"
@@ -117,7 +118,7 @@ async def save_file(file: UploadFile, file_type: str) -> Dict[str, Any]:
         "file_type": file_type,
         "content_type": file.content_type,
         "size": os.path.getsize(file_path),
-        "uploaded_at": datetime.utcnow().isoformat()
+        "uploaded_at": datetime.now(ZoneInfo("Asia/Kolkata")).isoformat()
     }
 
 async def create_thumbnail(image_path: str, file_id: str) -> str:
