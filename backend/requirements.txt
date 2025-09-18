@@ -9,3 +9,4 @@ Werkzeug
 websockets
 python-multipart
 Pillow
+gunicorn
