@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pymongo
+motor
+pydantic[email]
+python-dotenv
+python-jose[cryptography]
+Werkzeug
+websockets
+python-multipart
+Pillow

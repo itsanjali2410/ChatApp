@@ -1,0 +1,228 @@
+from datetime import timedelta
+from fastapi import FastAPI, HTTPException, APIRouter, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
+from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash as check_user_password_hash
+from .core.security import create_access_token
+from .routes.user_routes import router as user_routes
+from .routes.org_routes import router as org_routes 
+from .routes.chat_routes import router as chat_routes
+from .routes.message_routes import router as message_routes
+from .routes.file_routes import router as file_routes
+from .config import db
+from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+import os
+from .services.user_service import users_collection
+from .services.admin_service import get_admin_by_email
+from .websocket_manager import manager
+import json
+# UNUSED IMPORT - FLAG FOR REMOVAL
+# from .services import org_service  # TODO: REMOVE - not used in this file
+load_dotenv()
+import logging
+from starlette.middleware.sessions import SessionMiddleware
+
+logger = logging.getLogger("chatapp")
+if not logger.handlers:
+    logging.basicConfig(level=logging.INFO)
+
+app = FastAPI(title="Internal Chat Application")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # TODO: restrict in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "change-me-session-secret"))
+
+# Mount static files for uploads
+# app.mount("/files", StaticFiles(directory="uploads"), name="files")
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    logger.info("%s %s", request.method, request.url.path)
+    response = await call_next(request)
+    logger.info("%s %s -> %s", request.method, request.url.path, response.status_code)
+    return response
+
+# include routers
+app.include_router(user_routes, tags=["Users"])
+app.include_router(org_routes, tags=["Organization"])
+app.include_router(chat_routes, tags=["Chats"])
+app.include_router(message_routes, tags=["Messages"])
+app.include_router(file_routes, tags=["Files"])
+
+@app.get("/")
+def root():
+    return {"message": "Welcome to the Internal Chat Application API"}
+
+
+@app.on_event("startup")
+def on_startup():
+    logger.info("Backend started and ready to accept requests")
+
+router = APIRouter(prefix="/auth", tags=["Auth"])
+admin_collection = db["admins"]
+
+class AdminLogin(BaseModel):
+    email: str
+    password: str
+
+@router.post("/login")
+def login_admin(data: AdminLogin, response: Response):
+    # Admin login
+    admin = admin_collection.find_one({"email": data.email})
+    if admin and check_password_hash(admin["password"], data.password):
+        token = create_access_token(
+            {"sub": data.email, "role": "admin", "org_id": str(admin["organization_id"])},
+            expires_delta=timedelta(minutes=60)
+        )
+        response.set_cookie("access_token", token, httponly=True, samesite="lax")
+        return {
+            "access_token": token, 
+            "token_type": "bearer", 
+            "role": "admin", 
+            "org_id": str(admin["organization_id"]),
+            "user_id": str(admin["_id"])
+        }
+
+    # User login (hashed)
+    user = users_collection.find_one({"email": data.email})
+    if user and check_user_password_hash(user["password"], data.password):
+        token = create_access_token(
+            {"sub": data.email, "role": user.get("role", "user"), "org_id": str(user.get("organization_id"))},
+            expires_delta=timedelta(minutes=60)
+        )
+        response.set_cookie("access_token", token, httponly=True, samesite="lax")
+        return {
+            "access_token": token, 
+            "token_type": "bearer", 
+            "role": user.get("role", "user"), 
+            "org_id": str(user.get("organization_id")),
+            "user_id": str(user["_id"])
+        }
+
+    raise HTTPException(status_code=401, detail="Invalid credentials")
+
+# Check if email exists and whether org setup is needed
+@router.get("/check_email")
+def check_email(email: str):
+    admin = get_admin_by_email(email)
+    if admin:
+        return {"exists": True, "type": "admin", "need_org_setup": False, "org_id": str(admin.get("organization_id"))}
+    user = users_collection.find_one({"email": email})
+    if user:
+        return {"exists": True, "type": "user", "need_org_setup": user.get("organization_id") is None, "org_id": str(user.get("organization_id"))}
+    return {"exists": False, "need_org_setup": True}
+
+# Register admin and organization in one step for a brand-new email
+class RegisterAdminWithOrg(BaseModel):
+    username: str
+    email: str
+    password: str
+    org_name: str
+    description: str | None = None
+    address: str | None = None
+    website: str | None = None
+
+@router.post("/register_admin_with_org")
+def register_admin_with_org(payload: RegisterAdminWithOrg):
+    existing_admin = get_admin_by_email(payload.email)
+    existing_user = users_collection.find_one({"email": payload.email})
+    if existing_admin or existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    admin_data = {
+        "username": payload.username,
+        "email": payload.email,
+        "password": payload.password,
+        "role": "admin",
+    }
+    org_data = {
+        "org_name": payload.org_name,
+        "description": payload.description,
+        "address": payload.address,
+        "website": payload.website,
+    }
+    # Use admin_service.create_admin to handle links and hashing
+    from .services.admin_service import create_admin as svc_create_admin
+    admin_result, org_result = svc_create_admin(admin_data, org_data)
+    return {"admin_id": str(admin_result.inserted_id), "org_id": str(org_result.inserted_id)}
+
+
+app.include_router(router)
+
+# WebSocket endpoint for real-time messaging
+@app.websocket("/ws/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: str):
+    # Verify user token (you might want to pass token as query param)
+    # For now, we'll trust the user_id from the URL
+    await manager.connect(websocket, user_id)
+    
+    # Set user as online when they connect
+    from .services.user_service import update_user_by_id
+    from datetime import datetime
+    update_user_by_id(user_id, {
+        "is_online": True,
+        "last_seen": datetime.utcnow()
+    })
+    
+    try:
+        while True:
+            # Receive message from client
+            data = await websocket.receive_text()
+            message_data = json.loads(data)
+            
+            message_type = message_data.get("type")
+            
+            if message_type == "join_chat":
+                chat_id = message_data.get("chat_id")
+                await manager.join_chat(user_id, chat_id)
+                
+            elif message_type == "leave_chat":
+                chat_id = message_data.get("chat_id")
+                await manager.leave_chat(user_id, chat_id)
+                
+            elif message_type == "typing":
+                chat_id = message_data.get("chat_id")
+                is_typing = message_data.get("is_typing", False)
+                # Update user typing status in database
+                update_user_by_id(user_id, {
+                    "is_typing": is_typing,
+                    "current_chat_id": chat_id if is_typing else None
+                })
+                await manager.send_typing_indicator(chat_id, user_id, is_typing)
+                
+            elif message_type == "message":
+                # Handle new message
+                chat_id = message_data.get("chat_id")
+                message_content = message_data.get("message")
+                
+                # Broadcast to all users in the chat
+                await manager.broadcast_to_chat({
+                    "type": "new_message",
+                    "chat_id": chat_id,
+                    "sender_id": user_id,
+                    "message": message_content,
+                    "timestamp": message_data.get("timestamp")
+                }, chat_id, exclude_user=user_id)
+                
+    except WebSocketDisconnect:
+        # Set user as offline when they disconnect
+        update_user_by_id(user_id, {
+            "is_online": False,
+            "last_seen": datetime.utcnow(),
+            "is_typing": False,
+            "current_chat_id": None
+        })
+        manager.disconnect(user_id)
+
+# Logout endpoint clears cookie session
+@app.post("/auth/logout")
+def logout(response: Response):
+    response.delete_cookie("access_token")
+    return {"message": "Logged out"}
