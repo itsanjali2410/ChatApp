@@ -1,5 +1,6 @@
-export const dynamic = 'force-dynamic';
 "use client";
+
+export const dynamic = 'force-dynamic';
 import React, { useEffect, useState, useRef } from "react";
 import api, { getFileUrl } from "../../utils/api";
 import { useWebSocket } from "../../hooks/useWebSocket";
