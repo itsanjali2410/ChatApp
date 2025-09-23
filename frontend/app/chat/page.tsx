@@ -543,7 +543,7 @@ export default function ChatPage() {
         </div>
       )}
       {/* WhatsApp Sidebar */}
-      <div className="w-96 bg-white border-r border-gray-300 flex flex-col h-screen hidden lg:flex">
+      <div className="w-96 bg-white border-r border-gray-300 flex flex-col h-screen lg:flex">
         {/* WhatsApp Header - Sticky */}
         <div className="bg-gray-50 px-4 py-3 border-b border-gray-300 flex-shrink-0 sticky top-0 z-10">
           <div className="flex items-center justify-between">
