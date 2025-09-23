@@ -3,11 +3,15 @@ from bson import ObjectId
 from datetime import datetime
 from ..models.chat import Chat
 from typing import List, Optional
+from zoneinfo import ZoneInfo
 
 chats_collection = db["chats"]
 
 def create_chat(chat: Chat) -> str:
-    chat_dict = chat.dict()
+    if hasattr(chat, "dict"):
+        chat_dict = chat.dict()
+    else:
+        chat_dict = chat
     chat_dict["created_at"] = datetime.now(ZoneInfo("Asia/Kolkata"))
     result = chats_collection.insert_one(chat_dict)
     return str(result.inserted_id)

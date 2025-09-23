@@ -10,9 +10,8 @@ def send_message(message: ChatMessage) -> str:
     message_dict = message.dict()
     timestamp = datetime.now(ZoneInfo("Asia/Kolkata"))
     message_dict["timestamp"] = timestamp
-    
+
     # Debug current time
-    from datetime import datetime
     utc_now = datetime.utcnow()
     ist_now = datetime.now(ZoneInfo("Asia/Kolkata"))
     

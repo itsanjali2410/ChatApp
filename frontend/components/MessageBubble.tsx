@@ -1,5 +1,6 @@
 "use client";
 import React from 'react';
+import { useRouter } from 'next/navigation';
 
 interface FileAttachment {
   file_id: string;
@@ -25,6 +26,8 @@ interface MessageBubbleProps {
 }
 
 export default function MessageBubble({ message, isSelf, isTemp = false }: MessageBubbleProps) {
+  const router = useRouter();
+
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -112,11 +115,16 @@ export default function MessageBubble({ message, isSelf, isTemp = false }: Messa
                 modal.innerHTML = `
                   <div class="relative max-w-4xl max-h-full p-4">
                     <img src="${file_url}" alt="${filename}" class="max-w-full max-h-full rounded-lg" />
-                    <button class="absolute top-2 right-2 text-white bg-black bg-opacity-50 rounded-full p-2 hover:bg-opacity-75">
-                      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                      </svg>
-                    </button>
+                     <button
+        onClick={() => router.back()}
+        className="mb-2 flex items-center text-gray-600 hover:text-green-600"
+        aria-label="Back"
+      >
+        <svg className="w-6 h-6 mr-1" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+        </svg>
+        Back
+      </button>
                   </div>
                 `;
                 modal.onclick = (e) => {
@@ -189,59 +197,64 @@ export default function MessageBubble({ message, isSelf, isTemp = false }: Messa
   const isImageMessage = message.attachment && message.attachment.file_type === 'image';
   
   return (
-    <div className={`flex ${isSelf ? 'justify-end' : 'justify-start'} mb-1`}>
-      <div 
-        className={`${isImageMessage ? 'max-w-sm lg:max-w-lg' : 'max-w-xs lg:max-w-md'} px-3 py-2 rounded-lg ${
-          isSelf 
-            ? 'bg-green-500 text-white' 
-            : 'bg-white shadow-sm'
-        } ${isTemp ? 'opacity-70' : ''} ${
-          isImageMessage ? 'p-1' : ''
-        }`}
-        style={{
-          borderRadius: isSelf 
-            ? '18px 18px 4px 18px' 
-            : '18px 18px 18px 4px'
-        }}
-      >
-        {message.message && (
-          <div className="text-sm">{message.message}</div>
-        )}
-        
-        {renderAttachment()}
-        
-        <div className={`text-xs mt-1 flex items-center justify-end ${
-          isSelf ? 'text-green-100' : 'text-gray-500'
-        }`}>
-          <span className="flex items-center space-x-1">
-            <span>{(() => {
-              const timestamp = new Date(message.timestamp);
-              console.log(`MessageBubble timestamp: ${message.timestamp}, parsed: ${timestamp}, local time: ${timestamp.toLocaleTimeString('en-IN', { 
-                hour: '2-digit', 
-                minute: '2-digit',
-                timeZone: 'Asia/Kolkata'
-              })}`);
-              return timestamp.toLocaleTimeString('en-IN', { 
-                hour: '2-digit', 
-                minute: '2-digit',
-                timeZone: 'Asia/Kolkata'
-              });
-            })()}</span>
-            {isSelf && (
-              <svg className="w-3 h-3 ml-1" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-            )}
-            {isTemp && (
-              <div className="flex space-x-1 ml-1">
-                <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce"></div>
-                <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-              </div>
-            )}
-          </span>
+    <>
+      
+      <div className={`flex ${isSelf ? 'justify-end' : 'justify-start'} mb-1`}>
+        <div 
+          className={`${isImageMessage ? 'max-w-sm lg:max-w-lg' : 'max-w-xs lg:max-w-md'} px-3 py-2 rounded-lg ${
+            isSelf 
+              ? 'bg-green-500 text-white' 
+              : 'bg-white shadow-sm'
+          } ${isTemp ? 'opacity-70' : ''} ${
+            isImageMessage ? 'p-1' : ''
+          }`}
+          style={{
+            borderRadius: isSelf 
+              ? '18px 18px 4px 18px' 
+              : '18px 18px 18px 4px'
+          }}
+        >
+          {message.message && (
+            <div className="text-sm">{message.message}</div>
+          )}
+          
+          {renderAttachment()}
+          
+          <div className={`text-xs mt-1 flex items-center justify-end ${
+            isSelf ? 'text-green-100' : 'text-gray-500'
+          }`}>
+            <span className="flex items-center space-x-1">
+              <span>{(() => {
+  let timestamp = new Date(message.timestamp);
+  if (isNaN(timestamp.getTime())) {
+    // Try parsing as UTC if failed
+    timestamp = new Date(message.timestamp + 'Z');
+  }
+  if (isNaN(timestamp.getTime())) {
+    return "Invalid time";
+  }
+  return timestamp.toLocaleTimeString('en-IN', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    timeZone: 'Asia/Kolkata'
+  });
+})()}</span>
+              {isSelf && (
+                <svg className="w-3 h-3 ml-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+              )}
+              {isTemp && (
+                <div className="flex space-x-1 ml-1">
+                  <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce"></div>
+                  <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                  <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                </div>
+              )}
+            </span>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
