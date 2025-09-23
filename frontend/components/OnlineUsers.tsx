@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import api, { getFileUrl } from '../utils/api';
-
+import dynamic from 'next/dynamic';
 interface OnlineUser {
   _id: string;
   username: string;

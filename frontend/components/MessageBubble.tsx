@@ -38,7 +38,7 @@ export default function MessageBubble({ message, isSelf, isTemp = false }: Messa
 
   const getFileIcon = (fileType: string, filename: string) => {
     const extension = filename.split('.').pop()?.toLowerCase();
-    
+
     // Image files
     if (fileType === 'image') {
       return (
@@ -47,7 +47,7 @@ export default function MessageBubble({ message, isSelf, isTemp = false }: Messa
         </svg>
       );
     }
-    
+
     // Document files
     switch (extension) {
       case 'pdf':
@@ -96,7 +96,7 @@ export default function MessageBubble({ message, isSelf, isTemp = false }: Messa
     if (!message.attachment) return null;
 
     const { file_type, filename, file_url, thumbnail_url, size } = message.attachment;
-    
+
     // Debug logging
     console.log('File attachment data:', { file_type, filename, file_url, size });
 
@@ -164,7 +164,7 @@ export default function MessageBubble({ message, isSelf, isTemp = false }: Messa
                     // Fetch the file
                     const response = await fetch(file_url);
                     const blob = await response.blob();
-                    
+
                     // Create download link
                     const url = window.URL.createObjectURL(blob);
                     const link = document.createElement('a');
@@ -195,50 +195,47 @@ export default function MessageBubble({ message, isSelf, isTemp = false }: Messa
   };
 
   const isImageMessage = message.attachment && message.attachment.file_type === 'image';
-  
+
   return (
     <>
-      
+
       <div className={`flex ${isSelf ? 'justify-end' : 'justify-start'} mb-1`}>
-        <div 
-          className={`${isImageMessage ? 'max-w-sm lg:max-w-lg' : 'max-w-xs lg:max-w-md'} px-3 py-2 rounded-lg ${
-            isSelf 
-              ? 'bg-green-500 text-white' 
+        <div
+          className={`${isImageMessage ? 'max-w-sm lg:max-w-lg' : 'max-w-xs lg:max-w-md'} px-3 py-2 rounded-lg ${isSelf
+              ? 'bg-green-500 text-white'
               : 'bg-white shadow-sm'
-          } ${isTemp ? 'opacity-70' : ''} ${
-            isImageMessage ? 'p-1' : ''
-          }`}
+            } ${isTemp ? 'opacity-70' : ''} ${isImageMessage ? 'p-1' : ''
+            }`}
           style={{
-            borderRadius: isSelf 
-              ? '18px 18px 4px 18px' 
+            borderRadius: isSelf
+              ? '18px 18px 4px 18px'
               : '18px 18px 18px 4px'
           }}
         >
           {message.message && (
             <div className="text-sm">{message.message}</div>
           )}
-          
+
           {renderAttachment()}
-          
-          <div className={`text-xs mt-1 flex items-center justify-end ${
-            isSelf ? 'text-green-100' : 'text-gray-500'
-          }`}>
+
+          <div className={`text-xs mt-1 flex items-center justify-end ${isSelf ? 'text-green-100' : 'text-gray-500'
+            }`}>
             <span className="flex items-center space-x-1">
               <span>{(() => {
-  let timestamp = new Date(message.timestamp);
-  if (isNaN(timestamp.getTime())) {
-    // Try parsing as UTC if failed
-    timestamp = new Date(message.timestamp + 'Z');
-  }
-  if (isNaN(timestamp.getTime())) {
-    return "Invalid time";
-  }
-  return timestamp.toLocaleTimeString('en-IN', { 
-    hour: '2-digit', 
-    minute: '2-digit',
-    timeZone: 'Asia/Kolkata'
-  });
-})()}</span>
+                let timestamp = new Date(message.timestamp);
+                if (isNaN(timestamp.getTime())) {
+                  // Try parsing as UTC if failed
+                  timestamp = new Date(message.timestamp + 'Z');
+                }
+                if (isNaN(timestamp.getTime())) {
+                  return "Invalid time";
+                }
+                return timestamp.toLocaleTimeString('en-IN', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  timeZone: 'Asia/Kolkata'
+                });
+              })()}</span>
               {isSelf && (
                 <svg className="w-3 h-3 ml-1" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -247,8 +244,8 @@ export default function MessageBubble({ message, isSelf, isTemp = false }: Messa
               {isTemp && (
                 <div className="flex space-x-1 ml-1">
                   <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce"></div>
-                  <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                  <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                  <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                  <div className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                 </div>
               )}
             </span>
