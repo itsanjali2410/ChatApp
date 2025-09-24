@@ -6,8 +6,11 @@ export class NotificationService {
   private unreadCount: number = 0;
 
   private constructor() {
-    this.requestPermission();
-    this.setupFocusListeners();
+    // Only initialize on client side
+    if (typeof window !== 'undefined') {
+      this.requestPermission();
+      this.setupFocusListeners();
+    }
   }
 
   public static getInstance(): NotificationService {
@@ -18,13 +21,15 @@ export class NotificationService {
   }
 
   private async requestPermission(): Promise<void> {
-    if ('Notification' in window) {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
       this.permission = await Notification.requestPermission();
       console.log('Notification permission:', this.permission);
     }
   }
 
   private setupFocusListeners(): void {
+    if (typeof window === 'undefined') return;
+    
     // Track if app is focused
     document.addEventListener('visibilitychange', () => {
       this.isAppFocused = !document.hidden;
@@ -49,7 +54,7 @@ export class NotificationService {
     options: NotificationOptions = {}
   ): Promise<void> {
     // Only show notification if permission is granted and app is not focused
-    if (this.permission !== 'granted' || this.isAppFocused) {
+    if (typeof window === 'undefined' || this.permission !== 'granted' || this.isAppFocused) {
       return;
     }
 
@@ -119,6 +124,8 @@ export class NotificationService {
   }
 
   private updateTitle(): void {
+    if (typeof window === 'undefined') return;
+    
     if (this.unreadCount > 0) {
       document.title = `(${this.unreadCount}) ChatApp`;
     } else {
@@ -127,6 +134,8 @@ export class NotificationService {
   }
 
   public playNotificationSound(): void {
+    if (typeof window === 'undefined') return;
+    
     try {
       // Create audio context for notification sound
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -154,7 +163,7 @@ export class NotificationService {
   }
 
   public vibrate(pattern: number | number[] = [200, 100, 200]): void {
-    if ('vibrate' in navigator) {
+    if (typeof window !== 'undefined' && 'vibrate' in navigator) {
       navigator.vibrate(pattern);
     }
   }
