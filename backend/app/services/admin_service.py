@@ -37,3 +37,8 @@ def get_admin(admin_id: str):
     if admin:
         admin["_id"] = str(admin["_id"])
     return admin
+
+def update_admin(admin_id: str, updates: dict):
+    """Update admin by ID"""
+    result = admin_collection.update_one({"_id": ObjectId(admin_id)}, {"$set": updates})
+    return result.modified_count > 0

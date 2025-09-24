@@ -179,6 +179,259 @@ def modify_chat(chat_id: str, updates: dict, current_user=Depends(get_current_us
         raise HTTPException(status_code=404, detail="Chat not found or not updated")
     return {"message": "Chat updated"}
 
+# ✅ Create group chat
+@router.post("/create-group")
+def create_group_chat(payload: dict, current_user=Depends(get_current_user)):
+    """Create a group chat with multiple users"""
+    group_name = payload.get("group_name")
+    group_description = payload.get("group_description", "")
+    participant_ids = payload.get("participant_ids", [])
+    
+    if not group_name:
+        raise HTTPException(status_code=400, detail="group_name is required")
+    
+    if not participant_ids or len(participant_ids) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 participants are required for group chat")
+    
+    # Get current user ID from database
+    from ..services.user_service import get_user_by_email
+    from ..services.admin_service import get_admin_by_email
+    
+    user_email = current_user.get("sub")
+    current_user_obj = get_user_by_email(user_email) or get_admin_by_email(user_email)
+    if not current_user_obj:
+        raise HTTPException(status_code=404, detail="Current user not found")
+    
+    current_user_id = str(current_user_obj["_id"])
+    user_org_id = current_user.get("org_id")
+    
+    # Add current user to participants if not already included
+    if current_user_id not in participant_ids:
+        participant_ids.append(current_user_id)
+    
+    # Verify all participants are in the same organization
+    from ..services.user_service import get_user_by_id
+    for user_id in participant_ids:
+        user = get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+        if user.get("organization_id") != user_org_id:
+            raise HTTPException(status_code=403, detail=f"User {user_id} is not in your organization")
+    
+    # Check if group chat already exists with these participants
+    from ..services.chat_service import chats_collection
+    existing_chat = chats_collection.find_one({
+        "type": "group",
+        "participants": {"$all": participant_ids, "$size": len(participant_ids)},
+        "organization_id": user_org_id
+    })
+    
+    if existing_chat:
+        return {
+            "id": str(existing_chat["_id"]),
+            "type": existing_chat["type"],
+            "participants": existing_chat["participants"],
+            "organization_id": existing_chat["organization_id"],
+            "group_name": existing_chat.get("group_name"),
+            "group_description": existing_chat.get("group_description"),
+            "created_by": existing_chat.get("created_by"),
+            "admins": existing_chat.get("admins", [])
+        }
+    
+    # Create new group chat
+    chat_data = {
+        "type": "group",
+        "participants": participant_ids,
+        "organization_id": user_org_id,
+        "group_name": group_name,
+        "group_description": group_description,
+        "created_by": current_user_id,
+        "admins": [current_user_id]  # Creator is admin by default
+    }
+    
+    from ..services.chat_service import create_chat
+    chat_id = create_chat(chat_data)
+    
+    return {
+        "id": chat_id,
+        "type": "group",
+        "participants": participant_ids,
+        "organization_id": user_org_id,
+        "group_name": group_name,
+        "group_description": group_description,
+        "created_by": current_user_id,
+        "admins": [current_user_id]
+    }
+
+# ✅ Add users to group chat
+@router.post("/{chat_id}/add-members")
+def add_members_to_group(chat_id: str, payload: dict, current_user=Depends(get_current_user)):
+    """Add members to an existing group chat"""
+    new_member_ids = payload.get("member_ids", [])
+    
+    if not new_member_ids:
+        raise HTTPException(status_code=400, detail="member_ids is required")
+    
+    # Get current user ID
+    from ..services.user_service import get_user_by_email
+    from ..services.admin_service import get_admin_by_email
+    
+    user_email = current_user.get("sub")
+    current_user_obj = get_user_by_email(user_email) or get_admin_by_email(user_email)
+    if not current_user_obj:
+        raise HTTPException(status_code=404, detail="Current user not found")
+    
+    current_user_id = str(current_user_obj["_id"])
+    user_org_id = current_user.get("org_id")
+    
+    # Get chat details
+    chat = get_chat(chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    
+    if chat.get("type") != "group":
+        raise HTTPException(status_code=400, detail="This is not a group chat")
+    
+    if chat.get("organization_id") != user_org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Check if current user is admin or creator
+    if current_user_id not in chat.get("admins", []) and current_user_id != chat.get("created_by"):
+        raise HTTPException(status_code=403, detail="Only group admins can add members")
+    
+    # Verify all new members are in the same organization
+    from ..services.user_service import get_user_by_id
+    for user_id in new_member_ids:
+        user = get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+        if user.get("organization_id") != user_org_id:
+            raise HTTPException(status_code=403, detail=f"User {user_id} is not in your organization")
+    
+    # Add new members to participants (avoid duplicates)
+    current_participants = set(chat.get("participants", []))
+    new_participants = list(current_participants.union(set(new_member_ids)))
+    
+    # Update chat
+    updates = {"participants": new_participants}
+    success = update_chat(chat_id, updates)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to add members")
+    
+    return {"message": "Members added successfully", "participants": new_participants}
+
+# ✅ Remove users from group chat
+@router.post("/{chat_id}/remove-members")
+def remove_members_from_group(chat_id: str, payload: dict, current_user=Depends(get_current_user)):
+    """Remove members from an existing group chat"""
+    member_ids_to_remove = payload.get("member_ids", [])
+    
+    if not member_ids_to_remove:
+        raise HTTPException(status_code=400, detail="member_ids is required")
+    
+    # Get current user ID
+    from ..services.user_service import get_user_by_email
+    from ..services.admin_service import get_admin_by_email
+    
+    user_email = current_user.get("sub")
+    current_user_obj = get_user_by_email(user_email) or get_admin_by_email(user_email)
+    if not current_user_obj:
+        raise HTTPException(status_code=404, detail="Current user not found")
+    
+    current_user_id = str(current_user_obj["_id"])
+    user_org_id = current_user.get("org_id")
+    
+    # Get chat details
+    chat = get_chat(chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    
+    if chat.get("type") != "group":
+        raise HTTPException(status_code=400, detail="This is not a group chat")
+    
+    if chat.get("organization_id") != user_org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Check if current user is admin or creator
+    if current_user_id not in chat.get("admins", []) and current_user_id != chat.get("created_by"):
+        raise HTTPException(status_code=403, detail="Only group admins can remove members")
+    
+    # Remove members from participants
+    current_participants = chat.get("participants", [])
+    new_participants = [p for p in current_participants if p not in member_ids_to_remove]
+    
+    # Ensure at least 2 members remain (minimum for group)
+    if len(new_participants) < 2:
+        raise HTTPException(status_code=400, detail="Group must have at least 2 members")
+    
+    # Remove from admins if they were admins
+    current_admins = chat.get("admins", [])
+    new_admins = [a for a in current_admins if a not in member_ids_to_remove]
+    
+    # Update chat
+    updates = {
+        "participants": new_participants,
+        "admins": new_admins
+    }
+    success = update_chat(chat_id, updates)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to remove members")
+    
+    return {"message": "Members removed successfully", "participants": new_participants}
+
+# ✅ Update group info
+@router.put("/{chat_id}/group-info")
+def update_group_info(chat_id: str, payload: dict, current_user=Depends(get_current_user)):
+    """Update group name and description"""
+    group_name = payload.get("group_name")
+    group_description = payload.get("group_description")
+    
+    # Get current user ID
+    from ..services.user_service import get_user_by_email
+    from ..services.admin_service import get_admin_by_email
+    
+    user_email = current_user.get("sub")
+    current_user_obj = get_user_by_email(user_email) or get_admin_by_email(user_email)
+    if not current_user_obj:
+        raise HTTPException(status_code=404, detail="Current user not found")
+    
+    current_user_id = str(current_user_obj["_id"])
+    user_org_id = current_user.get("org_id")
+    
+    # Get chat details
+    chat = get_chat(chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    
+    if chat.get("type") != "group":
+        raise HTTPException(status_code=400, detail="This is not a group chat")
+    
+    if chat.get("organization_id") != user_org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Check if current user is admin or creator
+    if current_user_id not in chat.get("admins", []) and current_user_id != chat.get("created_by"):
+        raise HTTPException(status_code=403, detail="Only group admins can update group info")
+    
+    # Update group info
+    updates = {}
+    if group_name is not None:
+        updates["group_name"] = group_name
+    if group_description is not None:
+        updates["group_description"] = group_description
+    
+    if not updates:
+        raise HTTPException(status_code=400, detail="No updates provided")
+    
+    success = update_chat(chat_id, updates)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to update group info")
+    
+    return {"message": "Group info updated successfully"}
+
 # ✅ Delete chat
 @router.delete("/{chat_id}")
 def remove_chat(chat_id: str, current_user=Depends(get_current_user)):

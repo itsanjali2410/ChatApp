@@ -9,6 +9,7 @@ from .routes.org_routes import router as org_routes
 from .routes.chat_routes import router as chat_routes
 from .routes.message_routes import router as message_routes
 from .routes.file_routes import router as file_routes
+from .routes.admin_routes import router as admin_routes
 from .config import db
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
@@ -55,6 +56,7 @@ app.include_router(org_routes, tags=["Organization"])
 app.include_router(chat_routes, tags=["Chats"])
 app.include_router(message_routes, tags=["Messages"])
 app.include_router(file_routes, tags=["Files"])
+app.include_router(admin_routes, tags=["Admin"])
 
 @app.get("/")
 def root():

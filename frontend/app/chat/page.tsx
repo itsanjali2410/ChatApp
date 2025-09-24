@@ -9,6 +9,8 @@ import FileUpload from "../../components/FileUpload";
 import MessageBubble from "../../components/MessageBubble";
 import OnlineUsers from "../../components/OnlineUsers";
 import ProfileManager from "../../components/ProfileManager";
+import GroupCreationModal from "../../components/GroupCreationModal";
+import GroupManagementModal from "../../components/GroupManagementModal";
 
 // Extend the Window interface to include typingTimeout
 declare global {
@@ -28,7 +30,17 @@ type User = {
   is_typing?: boolean;
   current_chat_id?: string;
 };
-type Chat = { id: string; type: string; participants: string[]; organization_id: string };
+type Chat = { 
+  id: string; 
+  type: string; 
+  participants: string[]; 
+  organization_id: string;
+  group_name?: string;
+  group_description?: string;
+  group_avatar?: string;
+  created_by?: string;
+  admins?: string[];
+};
 type FileAttachment = {
   file_id: string;
   filename: string;
@@ -65,9 +77,17 @@ export default function ChatPage() {
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
   const [showPopupNotification, setShowPopupNotification] = useState(false);
   const [popupMessage, setPopupMessage] = useState<{sender: string, message: string} | null>(null);
+  const [showGroupCreation, setShowGroupCreation] = useState(false);
+  const [showGroupManagement, setShowGroupManagement] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const myId = typeof window !== "undefined" ? localStorage.getItem("user_id") || "" : "";
   const orgId = typeof window !== "undefined" ? localStorage.getItem("org_id") || "" : "";
+  
+  // Debug logging
+  console.log("My ID from localStorage:", myId);
+  console.log("Users loaded:", users.length);
+  console.log("Users data:", users);
+  console.log("Filtered users (excluding self):", users.filter(user => user._id !== myId));
 
   // WebSocket connection
   const { isConnected, sendMessage: sendWSMessage } = useWebSocket({
@@ -291,6 +311,7 @@ export default function ChatPage() {
     console.log("Org ID:", orgId);
     
     try {
+      console.log("Creating direct chat...");
       const response = await api.post("/chats/create-direct", {
         other_user_id: otherUserId
       });
@@ -308,13 +329,17 @@ export default function ChatPage() {
       });
       
       setActiveChat(newChat);
+      console.log("Set active chat to:", newChat);
       
       // Join the chat via WebSocket
       if (isConnected) {
+        console.log("Joining chat via WebSocket...");
         sendWSMessage(JSON.stringify({
           type: "join_chat",
           chat_id: newChat.id
         }));
+      } else {
+        console.log("WebSocket not connected, cannot join chat");
       }
     } catch (e: any) {
       const detail = e?.response?.data?.detail || "Failed to create chat";
@@ -322,6 +347,58 @@ export default function ChatPage() {
       console.error("Error creating chat:", e);
     }
   };
+
+  const openGroupChat = async (chat: Chat) => {
+    console.log("Opening group chat:", chat);
+    setActiveChat(chat);
+    
+    // Join the chat via WebSocket
+    if (isConnected) {
+      sendWSMessage(JSON.stringify({
+        type: "join_chat",
+        chat_id: chat.id
+      }));
+    }
+  };
+
+  const handleGroupCreated = (newGroup: any) => {
+    console.log("Group created:", newGroup);
+    
+    // Add to chats if not already present
+    setChats(prev => {
+      const exists = prev.some(chat => chat.id === newGroup.id);
+      if (!exists) {
+        return [...prev, newGroup];
+      }
+      return prev;
+    });
+    
+    setActiveChat(newGroup);
+    
+    // Join the chat via WebSocket
+    if (isConnected) {
+      sendWSMessage(JSON.stringify({
+        type: "join_chat",
+        chat_id: newGroup.id
+      }));
+    }
+  };
+
+  const handleGroupUpdated = () => {
+    // Refresh chats to get updated group info
+    const loadChats = async () => {
+      try {
+        const resChats = await api.get("/chats/my-chats");
+        setChats(resChats.data);
+      } catch (e) {
+        console.error("Failed to refresh chats:", e);
+      }
+    };
+    loadChats();
+  };
+
+  // Check if organization has 3+ users (minimum for group creation)
+  const canCreateGroup = users.length >= 3;
 
   const sendMessage = async () => {
     if (!newMessage.trim() || !activeChat) return;
@@ -602,57 +679,58 @@ export default function ChatPage() {
           </div>
         </div>
 
+        {/* Create Group Button */}
+        {canCreateGroup && (
+          <div className="px-4 py-3 border-b border-gray-200">
+            <button
+              onClick={() => setShowGroupCreation(true)}
+              className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Create Group
+            </button>
+          </div>
+        )}
+
         {/* Chat List - Scrollable */}
         <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-            {users
-              .filter(user => user._id !== myId)
-              .map(user => (
-                <div
-                  key={user._id}
-                  onClick={() => openDirectChat(user._id)}
+          {/* Group Chats */}
+          {chats
+            .filter(chat => chat.type === "group")
+            .map(chat => (
+              <div
+                key={chat.id}
+                onClick={() => openGroupChat(chat)}
                 className={`flex items-center px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 transition-colors duration-150 ${
-                  activeChat?.participants.includes(user._id) ? 'bg-gray-50' : ''
+                  activeChat?.id === chat.id ? 'bg-gray-50' : ''
                 }`}
-                >
+              >
                 <div className="relative flex-shrink-0">
-                  {user.profile_picture ? (
-                    <img
-                      src={getFileUrl(user.profile_picture)}
-                      alt={getDisplayName(user)}
-                      className="w-12 h-12 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-semibold">
-                      {getInitials(user)}
-                    </div>
-                  )}
-                  {user.is_online && (
-                    <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></span>
-                  )}
+                  <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center text-white font-semibold">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                  </div>
                 </div>
                 <div className="ml-3 flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium text-gray-900 truncate">
-                      {getDisplayName(user)}
+                      {chat.group_name}
                     </p>
                     <p className="text-xs text-gray-500">
                       {(() => {
-                        // Find the chat for this user
-                        const userChat = chats.find(chat => 
-                          chat.participants.includes(user._id) && chat.participants.includes(myId)
-                        );
-                        if (userChat) {
-                          // Find the most recent message for this chat
-                          const chatMessages = messages.filter(m => m.chat_id === userChat.id);
-                          if (chatMessages.length > 0) {
-                            const lastMessage = chatMessages[chatMessages.length - 1];
-                            if (lastMessage && lastMessage.timestamp) {
-                              return new Date(lastMessage.timestamp).toLocaleTimeString('en-IN', { 
-                                hour: '2-digit', 
-                                minute: '2-digit',
-                                timeZone: 'Asia/Kolkata'
-                              });
-                            }
+                        // Find the most recent message for this chat
+                        const chatMessages = messages.filter(m => m.chat_id === chat.id);
+                        if (chatMessages.length > 0) {
+                          const lastMessage = chatMessages[chatMessages.length - 1];
+                          if (lastMessage && lastMessage.timestamp) {
+                            return new Date(lastMessage.timestamp).toLocaleTimeString('en-IN', { 
+                              hour: '2-digit', 
+                              minute: '2-digit',
+                              timeZone: 'Asia/Kolkata'
+                            });
                           }
                         }
                         return new Date().toLocaleTimeString('en-IN', { 
@@ -665,33 +743,100 @@ export default function ChatPage() {
                   </div>
                   <div className="flex items-center justify-between mt-1">
                     <p className="text-sm text-gray-500 truncate">
-                      {user.is_typing ? (
-                        <span className="text-green-600 italic">typing...</span>
-                      ) : (
-                        <span className="text-gray-500">
-                          {(() => {
-                            // Find the chat with this user
-                            const userChat = chats.find(chat => 
-                              chat.participants.includes(user._id) && 
-                              chat.participants.includes(myId)
-                            );
-                            if (userChat && lastMessages[userChat.id]) {
-                              return lastMessages[userChat.id];
-                            }
-                            return "Hey there! I am using ChatApp.";
-                          })()}
-                        </span>
-                      )}
+                      {lastMessages[chat.id] || `${chat.participants.length} members`}
                     </p>
-                    {!user.is_typing && (
-                      <div className="flex items-center">
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <div className="flex items-center">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+          {/* Direct Chats */}
+          {(() => {
+            const filteredUsers = users.filter(user => user._id !== myId);
+            console.log("Rendering users:", filteredUsers.length, "users");
+            return filteredUsers;
+          })()
+            .map(user => {
+              // Find the direct chat with this user
+              const userChat = chats.find(chat => 
+                chat.type === "direct" && 
+                chat.participants.includes(user._id) && 
+                chat.participants.includes(myId)
+              );
+
+              if (!userChat) return null;
+
+              return (
+                <div
+                  key={user._id}
+                  onClick={() => openDirectChat(user._id)}
+                  className={`flex items-center px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 transition-colors duration-150 ${
+                    activeChat?.id === userChat.id ? 'bg-gray-50' : ''
+                  }`}
+                >
+                  <div className="relative flex-shrink-0">
+                    {user.profile_picture ? (
+                      <img
+                        src={getFileUrl(user.profile_picture)}
+                        alt={getDisplayName(user)}
+                        className="w-12 h-12 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-semibold">
+                        {getInitials(user)}
                       </div>
+                    )}
+                    {user.is_online && (
+                      <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></span>
+                    )}
+                  </div>
+                  <div className="ml-3 flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {getDisplayName(user)}
+                      </p>
+                        <p className="text-xs text-gray-500">
+                          {(() => {
+                            if (userChat) {
+                              const chatMessages = messages.filter(m => m.chat_id === userChat.id);
+                              if (chatMessages.length > 0) {
+                                const lastMessage = chatMessages[chatMessages.length - 1];
+                                if (lastMessage && lastMessage.timestamp) {
+                                  return new Date(lastMessage.timestamp).toLocaleTimeString('en-IN', { 
+                                    hour: '2-digit', 
+                                    minute: '2-digit',
+                                    timeZone: 'Asia/Kolkata'
+                                  });
+                                }
+                              }
+                            }
+                            return "Click to start chat";
+                          })()}
+                        </p>
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <p className="text-sm text-gray-500 truncate">
+                        {user.is_typing ? (
+                          <span className="text-green-600 italic">typing...</span>
+                        ) : (
+                          <span className="text-gray-500">
+                            {userChat ? (lastMessages[userChat.id] || "Hey there! I am using ChatApp.") : "Click to start chatting"}
+                          </span>
+                        )}
+                      </p>
+                      {!user.is_typing && (
+                        <div className="flex items-center">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        </div>
                       )}
                     </div>
                   </div>
                 </div>
-              ))}
+              );
+            })}
         </div>
       </div>
 
@@ -713,21 +858,41 @@ export default function ChatPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
+                
+                {/* Chat Avatar */}
                 <div className="relative">
-                  <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
-                    <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                  </div>
+                  {activeChat.type === "group" ? (
+                    <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                    </div>
+                  ) : (
+                    <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
+                      <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                  )}
                   <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
                 </div>
+                
+                {/* Chat Info */}
                 <div>
                   <h2 className="font-semibold text-gray-900 text-lg">
-                    {users.find(u => activeChat.participants.includes(u._id) && u._id !== myId)?.first_name || 'Chat'}
+                    {activeChat.type === "group" 
+                      ? activeChat.group_name 
+                      : users.find(u => activeChat.participants.includes(u._id) && u._id !== myId)?.first_name || 'Chat'
+                    }
                   </h2>
-                  <p className="text-sm text-gray-500">last seen recently</p>
-                  </div>
+                  <p className="text-sm text-gray-500">
+                    {activeChat.type === "group" 
+                      ? `${activeChat.participants.length} members`
+                      : "last seen recently"
+                    }
+                  </p>
                 </div>
+              </div>
                 <div className="flex items-center space-x-4">
                   {/* Voice Call - Commented out as not enabled */}
                   {/* <button className="text-gray-600 hover:text-gray-800" title="Voice Call">
@@ -742,6 +907,19 @@ export default function ChatPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                     </svg>
                   </button> */}
+                  
+                  {/* Group Management Button */}
+                  {activeChat.type === "group" && (
+                    <button 
+                      onClick={() => setShowGroupManagement(true)}
+                      className="text-gray-600 hover:text-gray-800" 
+                      title="Group Info"
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </button>
+                  )}
                   
                   <button className="text-gray-600 hover:text-gray-800" title="More Options">
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -759,13 +937,16 @@ export default function ChatPage() {
                 backgroundRepeat: 'repeat'
               }}
             >
-              {messages.map((message) => (
+              {(() => {
+                console.log("Rendering messages:", messages.length, "messages for chat:", activeChat?.id);
+                return messages.map((message) => (
                       <MessageBubble
                   key={message.id}
                   message={message}
                   isSelf={message.sender_id === myId}
                 />
-              ))}
+              ));
+              })()}
               {otherUserTyping && (
                 <div className="flex items-center space-x-2 text-sm text-gray-500 mb-4">
                   <div className="flex space-x-1">
@@ -844,6 +1025,27 @@ export default function ChatPage() {
         </div>
         )}
       </div>
+
+      {/* Group Creation Modal */}
+      <GroupCreationModal
+        isOpen={showGroupCreation}
+        onClose={() => setShowGroupCreation(false)}
+        users={users}
+        currentUserId={myId}
+        onGroupCreated={handleGroupCreated}
+      />
+
+      {/* Group Management Modal */}
+      {activeChat && activeChat.type === "group" && (
+        <GroupManagementModal
+          isOpen={showGroupManagement}
+          onClose={() => setShowGroupManagement(false)}
+          chat={activeChat}
+          users={users}
+          currentUserId={myId}
+          onGroupUpdated={handleGroupUpdated}
+        />
+      )}
     </div>
   );
 }

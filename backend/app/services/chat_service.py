@@ -25,7 +25,12 @@ def get_chats_for_user(user_id: str) -> List[dict]:
             "participants": chat["participants"],
             "organization_id": chat["organization_id"],
             "last_message": chat.get("last_message"),
-            "created_at": chat["created_at"]
+            "created_at": chat["created_at"],
+            "group_name": chat.get("group_name"),
+            "group_description": chat.get("group_description"),
+            "group_avatar": chat.get("group_avatar"),
+            "created_by": chat.get("created_by"),
+            "admins": chat.get("admins", [])
         }
         for chat in chats
     ]
@@ -35,6 +40,17 @@ def get_chat(chat_id: str) -> Optional[dict]:
     if chat:
         chat["id"] = str(chat["_id"])
         del chat["_id"]
+        # Ensure group fields are included
+        if "group_name" not in chat:
+            chat["group_name"] = None
+        if "group_description" not in chat:
+            chat["group_description"] = None
+        if "group_avatar" not in chat:
+            chat["group_avatar"] = None
+        if "created_by" not in chat:
+            chat["created_by"] = None
+        if "admins" not in chat:
+            chat["admins"] = []
     return chat
 
 def update_chat(chat_id: str, updates: dict) -> bool:
