@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 
 const WS_BASE_URL = process.env.NODE_ENV === 'production'
-  ? process.env.NEXT_PUBLIC_WS_URL || 'wss://your-backend-url.railway.app'
-  : 'ws://localhost:8000';
+  ? process.env.NEXT_PUBLIC_WS_URL || 'wss://your-backend-url.railway.app/api'
+  : 'ws://localhost:8000/api';
 
 interface UseWebSocketOptions {
   url: string;
