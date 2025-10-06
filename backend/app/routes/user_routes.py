@@ -80,32 +80,116 @@ def update_current_user_profile(updates: dict, current_user=Depends(get_current_
 @router.post("/status/online")
 def set_user_online(current_user=Depends(get_current_user)):
     user_email = current_user.get("sub")  # JWT stores email in 'sub' field
+    user_role = current_user.get("role")
     if not user_email:
         raise HTTPException(status_code=400, detail="User email not found in token")
     
-    result = user_service.update_user(user_email, {"is_online": True})
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
+    if user_role == "admin":
+        from ..services.admin_service import get_admin_by_email, update_admin
+        admin = get_admin_by_email(user_email)
+        if not admin:
+            raise HTTPException(status_code=404, detail="Admin not found")
+        update_admin(str(admin["_id"]), {"is_online": True})
+    else:
+        result = user_service.update_user(user_email, {"is_online": True})
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="User not found")
     return {"message": "User set to online"}
 
 # Update user offline status
 @router.post("/status/offline")
 def set_user_offline(current_user=Depends(get_current_user)):
     user_email = current_user.get("sub")  # JWT stores email in 'sub' field
+    user_role = current_user.get("role")
     if not user_email:
         raise HTTPException(status_code=400, detail="User email not found in token")
     
-    result = user_service.update_user(user_email, {"is_online": False})
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="User not found")
+    if user_role == "admin":
+        from ..services.admin_service import get_admin_by_email, update_admin
+        admin = get_admin_by_email(user_email)
+        if not admin:
+            raise HTTPException(status_code=404, detail="Admin not found")
+        update_admin(str(admin["_id"]), {"is_online": False})
+    else:
+        result = user_service.update_user(user_email, {"is_online": False})
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="User not found")
     return {"message": "User set to offline"}
 
 # Users in same organization (requires auth) 
 @router.get("/by_org")
 def list_users_by_org(current_user=Depends(get_current_user)):
     org_id = current_user.get("org_id")
+    current_user_id = current_user.get("user_id")
+    
+    # Get all users from users collection
     all_users = user_service.list_users()
-    return [u for u in all_users if u.get("organization_id") == org_id]
+    org_users = []
+    for u in all_users:
+        if u.get("organization_id") == org_id:
+            # Add role field to distinguish from admins
+            u["role"] = u.get("role", "user")
+            org_users.append(u)
+    
+    # Get all admins from admins collection for the same organization
+    from ..services.admin_service import get_admins_by_org
+    org_admins = get_admins_by_org(org_id)
+    
+    # Combine users and admins, ensuring no duplicates
+    all_org_members = org_users + org_admins
+    
+    # Remove duplicates based on _id
+    seen_ids = set()
+    unique_members = []
+    for member in all_org_members:
+        member_id = str(member.get("_id"))
+        if member_id not in seen_ids:
+            seen_ids.add(member_id)
+            unique_members.append(member)
+    
+    # Sort users by most recent message timestamp
+    def get_last_message_timestamp(user_id):
+        from ..services.message_service import messages_collection
+        from ..services.chat_service import chats_collection
+        
+        # Find direct chat between current user and this user
+        chat = chats_collection.find_one({
+            "type": "direct",
+            "participants": {"$all": [current_user_id, user_id]},
+            "organization_id": org_id
+        })
+        
+        if not chat:
+            return 0
+        
+        # Get the most recent message in this chat
+        last_message = messages_collection.find_one(
+            {"chat_id": str(chat["_id"])},
+            sort=[("timestamp", -1)]
+        )
+        
+        if last_message and last_message.get("timestamp"):
+            # Handle both datetime objects and ISO strings
+            timestamp = last_message["timestamp"]
+            if hasattr(timestamp, 'timestamp'):
+                return timestamp.timestamp()
+            else:
+                try:
+                    from datetime import datetime
+                    if isinstance(timestamp, str):
+                        # Parse ISO string
+                        dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                        return dt.timestamp()
+                    else:
+                        return 0
+                except:
+                    return 0
+        return 0
+    
+    # Sort by last message timestamp (most recent first)
+    unique_members.sort(key=lambda user: get_last_message_timestamp(str(user["_id"])), reverse=True)
+    
+    return unique_members
 
 # Admin-only list by org_id
 @router.get("/admin/by_org")

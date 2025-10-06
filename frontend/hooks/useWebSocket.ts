@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 
 const WS_BASE_URL = process.env.NODE_ENV === 'production'
-  ? process.env.NEXT_PUBLIC_WS_URL || 'wss://your-backend-url.railway.app/api'
-  : 'ws://localhost:8000/api';
+  ? process.env.NEXT_PUBLIC_WS_URL || 'wss://your-backend-url.railway.app'
+  : 'ws://localhost:8000';
 
 interface UseWebSocketOptions {
   url: string;
@@ -30,7 +30,16 @@ export const useWebSocket = ({
 
   const connect = () => {
     try {
-      const fullUrl = url.startsWith('ws') ? url : `${WS_BASE_URL}${url}`;
+      // Get token from localStorage
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      if (!token) {
+        console.error('No authentication token found');
+        return;
+      }
+      
+      // Add token as query parameter
+      const separator = url.includes('?') ? '&' : '?';
+      const fullUrl = url.startsWith('ws') ? `${url}${separator}token=${encodeURIComponent(token)}` : `${WS_BASE_URL}${url}${separator}token=${encodeURIComponent(token)}`;
       ws.current = new WebSocket(fullUrl);
       
       ws.current.onopen = (event) => {

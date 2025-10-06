@@ -80,7 +80,7 @@ def login_admin(data: AdminLogin, response: Response):
     admin = admin_collection.find_one({"email": data.email})
     if admin and check_password_hash(admin["password"], data.password):
         token = create_access_token(
-            {"sub": data.email, "role": "admin", "org_id": str(admin["organization_id"])},
+            {"sub": data.email, "role": "admin", "org_id": str(admin["organization_id"]), "user_id": str(admin["_id"])},
             expires_delta=timedelta(minutes=60)
         )
         response.set_cookie("access_token", token, httponly=True, samesite="lax")
@@ -96,7 +96,7 @@ def login_admin(data: AdminLogin, response: Response):
     user = users_collection.find_one({"email": data.email})
     if user and check_user_password_hash(user["password"], data.password):
         token = create_access_token(
-            {"sub": data.email, "role": user.get("role", "user"), "org_id": str(user.get("organization_id"))},
+            {"sub": data.email, "role": user.get("role", "user"), "org_id": str(user.get("organization_id")), "user_id": str(user["_id"])},
             expires_delta=timedelta(minutes=60)
         )
         response.set_cookie("access_token", token, httponly=True, samesite="lax")
@@ -161,18 +161,49 @@ app.include_router(router)
 # WebSocket endpoint for real-time messaging
 @app.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
-    # Verify user token (you might want to pass token as query param)
-    # For now, we'll trust the user_id from the URL
+    await websocket.accept()
+    
+    # Get token from query parameters
+    query_params = websocket.query_params
+    token = query_params.get("token")
+    
+    if not token:
+        await websocket.close(code=4001, reason="Missing authentication token")
+        return
+    
+    # Verify the token
+    from .core.security import decode_access_token
+    payload = decode_access_token(token)
+    if payload is None:
+        await websocket.close(code=4001, reason="Invalid or expired token")
+        return
+    
+    # Verify the user_id matches the token
+    token_user_id = payload.get("user_id")
+    if token_user_id != user_id:
+        await websocket.close(code=4003, reason="User ID mismatch")
+        return
+    
     await manager.connect(websocket, user_id)
     
     # Set user as online when they connect
     from .services.user_service import update_user_by_id
+    from .services.admin_service import update_admin
     from datetime import datetime
     from zoneinfo import ZoneInfo
-    update_user_by_id(user_id, {
-        "is_online": True,
-        "last_seen": datetime.now(ZoneInfo("Asia/Kolkata"))
-    })
+    
+    # Check if user is admin or regular user and update accordingly
+    user_role = payload.get("role")
+    if user_role == "admin":
+        update_admin(user_id, {
+            "is_online": True,
+            "last_seen": datetime.now(ZoneInfo("Asia/Kolkata"))
+        })
+    else:
+        update_user_by_id(user_id, {
+            "is_online": True,
+            "last_seen": datetime.now(ZoneInfo("Asia/Kolkata"))
+        })
     
     try:
         while True:
@@ -194,10 +225,16 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                 chat_id = message_data.get("chat_id")
                 is_typing = message_data.get("is_typing", False)
                 # Update user typing status in database
-                update_user_by_id(user_id, {
-                    "is_typing": is_typing,
-                    "current_chat_id": chat_id if is_typing else None
-                })
+                if user_role == "admin":
+                    update_admin(user_id, {
+                        "is_typing": is_typing,
+                        "current_chat_id": chat_id if is_typing else None
+                    })
+                else:
+                    update_user_by_id(user_id, {
+                        "is_typing": is_typing,
+                        "current_chat_id": chat_id if is_typing else None
+                    })
                 await manager.send_typing_indicator(chat_id, user_id, is_typing)
                 
             elif message_type == "message":
@@ -211,17 +248,25 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                     "chat_id": chat_id,
                     "sender_id": user_id,
                     "message": message_content,
-                    "timestamp": message_data.get("timestamp")
+                    "timestamp": message_data.get("timestamp") or datetime.utcnow().isoformat() + "Z"
                 }, chat_id, exclude_user=user_id)
                 
     except WebSocketDisconnect:
         # Set user as offline when they disconnect
-        update_user_by_id(user_id, {
-            "is_online": False,
-            "last_seen": datetime.now(ZoneInfo("Asia/Kolkata")),
-            "is_typing": False,
-            "current_chat_id": None
-        })
+        if user_role == "admin":
+            update_admin(user_id, {
+                "is_online": False,
+                "last_seen": datetime.now(ZoneInfo("Asia/Kolkata")),
+                "is_typing": False,
+                "current_chat_id": None
+            })
+        else:
+            update_user_by_id(user_id, {
+                "is_online": False,
+                "last_seen": datetime.now(ZoneInfo("Asia/Kolkata")),
+                "is_typing": False,
+                "current_chat_id": None
+            })
         manager.disconnect(user_id)
 
 # Logout endpoint clears cookie session

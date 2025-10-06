@@ -28,9 +28,10 @@ def create_direct_chat(payload: dict, current_user=Depends(get_current_user)):
     current_user_id = str(current_user_obj["_id"])
     user_org_id = current_user.get("org_id")
     
-    # Get other user details
+    # Get other user details (check both users and admins)
     from ..services.user_service import get_user_by_id
-    other_user = get_user_by_id(other_user_id)
+    from ..services.admin_service import get_admin
+    other_user = get_user_by_id(other_user_id) or get_admin(other_user_id)
     if not other_user:
         raise HTTPException(status_code=404, detail="Other user not found")
     
@@ -211,8 +212,10 @@ def create_group_chat(payload: dict, current_user=Depends(get_current_user)):
     
     # Verify all participants are in the same organization
     from ..services.user_service import get_user_by_id
+    from ..services.admin_service import get_admin
     for user_id in participant_ids:
-        user = get_user_by_id(user_id)
+        # Check both users and admins
+        user = get_user_by_id(user_id) or get_admin(user_id)
         if not user:
             raise HTTPException(status_code=404, detail=f"User {user_id} not found")
         if user.get("organization_id") != user_org_id:

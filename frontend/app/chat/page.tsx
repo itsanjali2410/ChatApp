@@ -29,6 +29,7 @@ type User = {
   is_online?: boolean;
   is_typing?: boolean;
   current_chat_id?: string;
+  role?: string;
 };
 type Chat = { 
   id: string; 
@@ -79,6 +80,7 @@ export default function ChatPage() {
   const [popupMessage, setPopupMessage] = useState<{sender: string, message: string} | null>(null);
   const [showGroupCreation, setShowGroupCreation] = useState(false);
   const [showGroupManagement, setShowGroupManagement] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const myId = typeof window !== "undefined" ? localStorage.getItem("user_id") || "" : "";
   const orgId = typeof window !== "undefined" ? localStorage.getItem("org_id") || "" : "";
@@ -88,6 +90,8 @@ export default function ChatPage() {
   console.log("Users loaded:", users.length);
   console.log("Users data:", users);
   console.log("Filtered users (excluding self):", users.filter(user => user._id !== myId));
+  console.log("Admin users:", users.filter(user => user.role === 'admin'));
+  console.log("Regular users:", users.filter(user => user.role === 'user' || !user.role));
 
   // WebSocket connection
   const { isConnected, sendMessage: sendWSMessage } = useWebSocket({
@@ -98,19 +102,26 @@ export default function ChatPage() {
       
       if (data.type === "new_message") {
         const newMessage: Message = {
-          id: `ws-${Date.now()}`,
+          id: data.id || `ws-${Date.now()}`,
           chat_id: data.chat_id,
           sender_id: data.sender_id,
           message: data.message,
           timestamp: data.timestamp || new Date().toISOString(),
-          message_type: data.message_type || "text"
+          message_type: data.message_type || "text",
+          attachment: data.attachment
         };
         setMessages(prev => {
+          // Check if message already exists to avoid duplicates
+          const exists = prev.some(msg => msg.id === newMessage.id);
+          if (exists) return prev;
+          
           const updatedMessages = [...prev, newMessage];
           // Sort messages by timestamp to maintain correct order
-          return updatedMessages.sort((a, b) => 
-            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-          );
+          return updatedMessages.sort((a, b) => {
+            const timeA = new Date(a.timestamp).getTime();
+            const timeB = new Date(b.timestamp).getTime();
+            return timeA - timeB;
+          });
         });
         
         // Update last message for this chat
@@ -157,14 +168,29 @@ export default function ChatPage() {
       }
     },
     onOpen: () => {
-      console.log("WebSocket connected");
+      console.log("WebSocket connected successfully");
+      console.log("WebSocket URL:", `/ws/${myId}`);
       // Set user as online when WebSocket connects
-      api.post("/users/status/online").catch(console.error);
+      // Only attempt if we have a valid token
+      const token = localStorage.getItem("token");
+      if (token) {
+        api.post("/users/status/online").catch((error) => {
+          console.error("Failed to set user online:", error);
+          // If it's a 401 error, the response interceptor will handle redirect
+        });
+      }
     },
     onClose: () => {
       console.log("WebSocket disconnected");
       // Set user as offline when WebSocket disconnects
-      api.post("/users/status/offline").catch(console.error);
+      // Only attempt if we have a valid token
+      const token = localStorage.getItem("token");
+      if (token) {
+        api.post("/users/status/offline").catch((error) => {
+          console.error("Failed to set user offline:", error);
+          // If it's a 401 error, the response interceptor will handle redirect
+        });
+      }
     },
     onError: (error) => {
       console.error("WebSocket error:", error);
@@ -195,13 +221,35 @@ export default function ChatPage() {
   useEffect(() => {
     const load = async () => {
       setError(null);
+      
+      // Check if user is authenticated
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setError("Please log in to access the chat");
+        setTimeout(() => {
+          window.location.href = "/login";
+        }, 2000);
+        return;
+      }
+      
       try {
         const resUsers = await api.get("/users/by_org");
         setUsers(resUsers.data);
         
-        // Load current user profile
-        const resProfile = await api.get("/users/profile/me");
-        setCurrentUser(resProfile.data);
+        // Load current user profile (handle both users and admins)
+        try {
+          const resProfile = await api.get("/users/profile/me");
+          setCurrentUser(resProfile.data);
+        } catch (profileError) {
+          // If user profile fails, try admin profile
+          try {
+            const resAdminProfile = await api.get("/admin/profile");
+            setCurrentUser(resAdminProfile.data);
+          } catch (adminError) {
+            console.error("Failed to load both user and admin profiles:", profileError, adminError);
+            setError("Failed to load user profile");
+          }
+        }
         
         // Load existing chats
         const resChats = await api.get("/chats/my-chats");
@@ -271,9 +319,11 @@ export default function ChatPage() {
         console.log("First message timestamp:", msgs.data[0]?.timestamp);
         
         // Sort messages by timestamp to ensure correct order
-        const sortedMessages = msgs.data.sort((a: any, b: any) => 
-          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-        );
+        const sortedMessages = msgs.data.sort((a: any, b: any) => {
+          const timeA = new Date(a.timestamp).getTime();
+          const timeB = new Date(b.timestamp).getTime();
+          return timeA - timeB;
+        });
         
         setMessages(sortedMessages);
         
@@ -305,10 +355,56 @@ export default function ChatPage() {
     }
   }, [activeChat]);
 
+  // Helper functions
+  const getDisplayName = (user: User) => {
+    if (user.first_name && user.last_name) {
+      return `${user.first_name} ${user.last_name}`;
+    }
+    return user.username || user.email;
+  };
+
+  const getInitials = (user: User) => {
+    if (user.first_name && user.last_name) {
+      return `${user.first_name[0]}${user.last_name[0]}`.toUpperCase();
+    }
+    return (user.username || user.email).substring(0, 2).toUpperCase();
+  };
+
+  // Filter users (sorting will be handled by backend)
+  const filteredUsers = users.filter(user => {
+    // Exclude current user
+    if (user._id === myId) return false;
+    
+    // If no search query, show all users
+    if (!searchQuery.trim()) return true;
+    
+    // Search in user name, email, and role
+    const searchLower = searchQuery.toLowerCase();
+    const userName = getDisplayName(user).toLowerCase();
+    const userEmail = (user.email || '').toLowerCase();
+    const userRole = (user.role || '').toLowerCase();
+    
+    return userName.includes(searchLower) || 
+           userEmail.includes(searchLower) || 
+           userRole.includes(searchLower);
+  });
+
   const openDirectChat = async (otherUserId: string) => {
     console.log("Opening chat with:", otherUserId);
     console.log("My ID:", myId);
     console.log("Org ID:", orgId);
+    console.log("Token exists:", !!localStorage.getItem("token"));
+    
+    // Find the user we're trying to chat with
+    const targetUser = users.find(user => user._id === otherUserId);
+    console.log("Target user:", targetUser);
+    console.log("Target user role:", targetUser?.role);
+    
+    if (!myId) {
+      console.error("No user ID found in localStorage");
+      setError("User not authenticated. Please log in again.");
+      return;
+    }
     
     try {
       console.log("Creating direct chat...");
@@ -331,20 +427,29 @@ export default function ChatPage() {
       setActiveChat(newChat);
       console.log("Set active chat to:", newChat);
       
-      // Join the chat via WebSocket
-      if (isConnected) {
-        console.log("Joining chat via WebSocket...");
-        sendWSMessage(JSON.stringify({
-          type: "join_chat",
-          chat_id: newChat.id
-        }));
-      } else {
-        console.log("WebSocket not connected, cannot join chat");
-      }
+       // Join the chat via WebSocket
+       if (isConnected) {
+         console.log("Joining chat via WebSocket...");
+         sendWSMessage({
+           type: "join_chat",
+           chat_id: newChat.id
+         });
+       } else {
+         console.log("WebSocket not connected, cannot join chat");
+       }
     } catch (e: any) {
-      const detail = e?.response?.data?.detail || "Failed to create chat";
-      setError(detail);
       console.error("Error creating chat:", e);
+      
+      if (e?.response?.status === 401) {
+        setError("Your session has expired. Please log in again.");
+        localStorage.clear();
+        setTimeout(() => {
+          window.location.href = "/login";
+        }, 2000);
+      } else {
+        const detail = e?.response?.data?.detail || "Failed to create chat";
+        setError(detail);
+      }
     }
   };
 
@@ -352,13 +457,13 @@ export default function ChatPage() {
     console.log("Opening group chat:", chat);
     setActiveChat(chat);
     
-    // Join the chat via WebSocket
-    if (isConnected) {
-      sendWSMessage(JSON.stringify({
-        type: "join_chat",
-        chat_id: chat.id
-      }));
-    }
+     // Join the chat via WebSocket
+     if (isConnected) {
+       sendWSMessage({
+         type: "join_chat",
+         chat_id: chat.id
+       });
+     }
   };
 
   const handleGroupCreated = (newGroup: any) => {
@@ -375,13 +480,13 @@ export default function ChatPage() {
     
     setActiveChat(newGroup);
     
-    // Join the chat via WebSocket
-    if (isConnected) {
-      sendWSMessage(JSON.stringify({
-        type: "join_chat",
-        chat_id: newGroup.id
-      }));
-    }
+     // Join the chat via WebSocket
+     if (isConnected) {
+       sendWSMessage({
+         type: "join_chat",
+         chat_id: newGroup.id
+       });
+     }
   };
 
   const handleGroupUpdated = () => {
@@ -397,17 +502,86 @@ export default function ChatPage() {
     loadChats();
   };
 
+  const handleMessageCopy = (messageText: string) => {
+    navigator.clipboard.writeText(messageText).then(() => {
+      // Show a brief success notification
+      setPopupMessage({
+        sender: "System",
+        message: "Message copied to clipboard"
+      });
+      setShowPopupNotification(true);
+      setTimeout(() => setShowPopupNotification(false), 2000);
+    }).catch(err => {
+      console.error('Failed to copy message:', err);
+    });
+  };
+
+  const handleMessageDelete = async (messageId: string) => {
+    try {
+      await api.delete(`/messages/${messageId}`);
+      // Remove message from local state
+      setMessages(prev => prev.filter(msg => msg.id !== messageId));
+      
+      // Update last message if this was the last message
+      if (activeChat) {
+        const remainingMessages = messages.filter(msg => msg.id !== messageId);
+        const lastMessage = remainingMessages[remainingMessages.length - 1];
+        setLastMessages(prev => ({
+          ...prev,
+          [activeChat.id]: lastMessage ? lastMessage.message : "No messages yet"
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to delete message:', error);
+      setError('Failed to delete message');
+    }
+  };
+
+  const handleChatDelete = async (chatId: string) => {
+    try {
+      await api.delete(`/chats/${chatId}`);
+      // Remove chat from local state
+      setChats(prev => prev.filter(chat => chat.id !== chatId));
+      
+      // If this was the active chat, clear it
+      if (activeChat && activeChat.id === chatId) {
+        setActiveChat(null);
+        setMessages([]);
+      }
+      
+      // Remove from last messages
+      setLastMessages(prev => {
+        const updated = { ...prev };
+        delete updated[chatId];
+        return updated;
+      });
+    } catch (error) {
+      console.error('Failed to delete chat:', error);
+      setError('Failed to delete chat');
+    }
+  };
+
   // Check if organization has 3+ users (minimum for group creation)
   const canCreateGroup = users.length >= 3;
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !activeChat) return;
+    console.log("sendMessage called");
+    console.log("newMessage:", newMessage);
+    console.log("activeChat:", activeChat);
+    console.log("isConnected:", isConnected);
+    
+    if (!newMessage.trim() || !activeChat) {
+      console.log("Cannot send message - missing newMessage or activeChat");
+      return;
+    }
 
     const messageData = {
       chat_id: activeChat.id,
       message: newMessage.trim(),
       message_type: "text"
     };
+
+    console.log("Sending message data:", messageData);
 
     try {
       const response = await api.post("/messages/send", messageData);
@@ -416,9 +590,11 @@ export default function ChatPage() {
       // Add to local messages immediately and sort
       setMessages(prev => {
         const updatedMessages = [...prev, sentMessage];
-        return updatedMessages.sort((a, b) => 
-          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-        );
+        return updatedMessages.sort((a, b) => {
+          const timeA = new Date(a.timestamp).getTime();
+          const timeB = new Date(b.timestamp).getTime();
+          return timeA - timeB;
+        });
       });
       
       // Update last message for this chat
@@ -427,32 +603,42 @@ export default function ChatPage() {
         [activeChat.id]: newMessage.trim()
       }));
       
-      // Send via WebSocket for real-time delivery
-      if (isConnected) {
-        sendWSMessage(JSON.stringify({
-          type: "message",
-          chat_id: activeChat.id,
-          message: newMessage.trim(),
-          timestamp: sentMessage.timestamp
-        }));
-      }
+       // Send via WebSocket for real-time delivery
+       if (isConnected) {
+         sendWSMessage({
+           type: "message",
+           chat_id: activeChat.id,
+           message: newMessage.trim(),
+           timestamp: sentMessage.timestamp
+         });
+       }
       
       setNewMessage("");
       
-      // Stop typing indicator
-      if (isConnected) {
-        sendWSMessage(JSON.stringify({
-          type: "typing",
-          chat_id: activeChat.id,
-          is_typing: false
-        }));
-      }
+       // Stop typing indicator
+       if (isConnected) {
+         sendWSMessage({
+           type: "typing",
+           chat_id: activeChat.id,
+           is_typing: false
+         });
+       }
       setIsTyping(false);
       
     } catch (e: any) {
-      const detail = e?.response?.data?.detail || "Failed to send message";
-      setError(detail);
       console.error("Error sending message:", e);
+      
+      if (e?.response?.status === 401) {
+        setError("Your session has expired. Please log in again.");
+        // Clear localStorage and redirect to login
+        localStorage.clear();
+        setTimeout(() => {
+          window.location.href = "/login";
+        }, 2000);
+      } else {
+        const detail = e?.response?.data?.detail || "Failed to send message";
+        setError(detail);
+      }
     }
   };
 
@@ -466,31 +652,31 @@ export default function ChatPage() {
   const handleTyping = (e: React.ChangeEvent<HTMLInputElement>) => {
     setNewMessage(e.target.value);
     
-    if (!isTyping && activeChat && isConnected) {
-      setIsTyping(true);
-      sendWSMessage(JSON.stringify({
-        type: "typing",
-        chat_id: activeChat.id,
-        is_typing: true
-      }));
-    }
+     if (!isTyping && activeChat && isConnected) {
+       setIsTyping(true);
+       sendWSMessage({
+         type: "typing",
+         chat_id: activeChat.id,
+         is_typing: true
+       });
+     }
     
     // Clear existing timeout
     if (window.typingTimeout) {
       clearTimeout(window.typingTimeout);
     }
     
-    // Set new timeout to stop typing indicator
-    window.typingTimeout = setTimeout(() => {
-      if (isConnected && activeChat) {
-        sendWSMessage(JSON.stringify({
-          type: "typing",
-      chat_id: activeChat.id,
-          is_typing: false
-        }));
-      }
-      setIsTyping(false);
-    }, 1000);
+     // Set new timeout to stop typing indicator
+     window.typingTimeout = setTimeout(() => {
+       if (isConnected && activeChat) {
+         sendWSMessage({
+           type: "typing",
+           chat_id: activeChat.id,
+           is_typing: false
+         });
+       }
+       setIsTyping(false);
+     }, 1000);
   };
 
   const handleFileUpload = (fileData: any) => {
@@ -513,9 +699,11 @@ export default function ChatPage() {
            console.log("Message sent successfully:", response.data);
            setMessages(prev => {
              const updatedMessages = [...prev, response.data];
-             return updatedMessages.sort((a, b) => 
-               new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-             );
+            return updatedMessages.sort((a, b) => {
+              const timeA = new Date(a.timestamp).getTime();
+              const timeB = new Date(b.timestamp).getTime();
+              return timeA - timeB;
+            });
            });
           
           // Update last message for this chat
@@ -531,18 +719,114 @@ export default function ChatPage() {
     }
   };
 
-  const getDisplayName = (user: User) => {
-    if (user.first_name && user.last_name) {
-      return `${user.first_name} ${user.last_name}`;
+  const formatTimestamp = (timestamp: string) => {
+    try {
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) {
+        // Try parsing as UTC if failed
+        const utcDate = new Date(timestamp + 'Z');
+        if (isNaN(utcDate.getTime())) {
+          return "Invalid time";
+        }
+        return utcDate.toLocaleTimeString(undefined, {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        });
+      }
+      return date.toLocaleTimeString(undefined, {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (error) {
+      console.error('Timestamp formatting error:', error);
+      return "Invalid time";
     }
-    return user.username || user.email;
   };
 
-  const getInitials = (user: User) => {
-    if (user.first_name && user.last_name) {
-      return `${user.first_name[0]}${user.last_name[0]}`.toUpperCase();
+  const formatMessageTime = (timestamp: string) => {
+    try {
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) {
+        const utcDate = new Date(timestamp + 'Z');
+        if (isNaN(utcDate.getTime())) {
+          return "Invalid time";
+        }
+        return utcDate.toLocaleTimeString(undefined, {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        });
+      }
+      return date.toLocaleTimeString(undefined, {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (error) {
+      console.error('Message time formatting error:', error);
+      return "Invalid time";
     }
-    return (user.username || user.email).substring(0, 2).toUpperCase();
+  };
+
+  const formatMessageDate = (timestamp: string) => {
+    try {
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) {
+        const utcDate = new Date(timestamp + 'Z');
+        if (isNaN(utcDate.getTime())) {
+          return "Invalid date";
+        }
+        return utcDate.toLocaleDateString(undefined, {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+      }
+      return date.toLocaleDateString(undefined, {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    } catch (error) {
+      console.error('Message date formatting error:', error);
+      return "Invalid date";
+    }
+  };
+
+  const formatShortDate = (timestamp: string) => {
+    try {
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) {
+        const utcDate = new Date(timestamp + 'Z');
+        if (isNaN(utcDate.getTime())) {
+          return "Invalid date";
+        }
+        return utcDate.toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric'
+        });
+      }
+      return date.toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch (error) {
+      console.error('Short date formatting error:', error);
+      return "Invalid date";
+    }
+  };
+
+  const shouldShowDateSeparator = (currentMessage: any, previousMessage: any) => {
+    if (!previousMessage) return true;
+    
+    const currentDate = new Date(currentMessage.timestamp);
+    const previousDate = new Date(previousMessage.timestamp);
+    
+    return currentDate.toDateString() !== previousDate.toDateString();
   };
 
   if (loading) {
@@ -590,14 +874,29 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex">
+    <>
+      <style jsx global>{`
+        @media (max-width: 1024px) {
+          .sidebar {
+            transform: translateX(-100%);
+            transition: transform 0.3s ease-in-out;
+          }
+          .sidebar.show {
+            transform: translateX(0);
+          }
+          .sidebar.hidden {
+            transform: translateX(-100%);
+          }
+        }
+      `}</style>
+      <div className="min-h-screen bg-gray-50 flex flex-col lg:flex-row">
       {/* Popup Notification */}
       {showPopupNotification && popupMessage && (
-        <div className="fixed top-4 right-4 z-50 bg-white rounded-lg shadow-lg border border-gray-200 p-4 max-w-sm animate-slide-in">
+        <div className="fixed top-4 right-4 z-50 bg-white rounded-lg shadow-lg border border-gray-200 p-4 max-w-sm">
           <div className="flex items-start space-x-3">
             <div className="flex-shrink-0">
-              <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
               </div>
@@ -606,7 +905,7 @@ export default function ChatPage() {
               <p className="text-sm font-medium text-gray-900 truncate">
                 {popupMessage.sender}
               </p>
-              <p className="text-sm text-gray-500 truncate">
+              <p className="text-sm text-gray-600 truncate">
                 {popupMessage.message}
               </p>
             </div>
@@ -614,79 +913,107 @@ export default function ChatPage() {
               onClick={() => setShowPopupNotification(false)}
               className="flex-shrink-0 text-gray-400 hover:text-gray-600"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
         </div>
       )}
-      {/* WhatsApp Sidebar */}
-      <div className="w-96 bg-white border-r border-gray-300 flex flex-col h-screen lg:flex">
-        {/* WhatsApp Header - Sticky */}
-        <div className="bg-gray-50 px-4 py-3 border-b border-gray-300 flex-shrink-0 sticky top-0 z-10">
+      {/* Sidebar */}
+      <div className="sidebar w-full lg:w-80 bg-white border-r border-gray-200 flex flex-col h-screen lg:relative absolute z-40 lg:z-auto">
+        {/* Header */}
+        <div className="bg-blue-600 px-4 py-3 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-          {currentUser && (
-                <div className="relative">
-              {currentUser.profile_picture ? (
-                <img
-                      src={getFileUrl(currentUser.profile_picture)}
-                  alt="Profile"
-                  className="w-10 h-10 rounded-full object-cover"
-                />
-              ) : (
-                    <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-semibold text-sm">
-                  {getInitials(currentUser)}
-                </div>
-              )}
-                </div>
-              )}
-              <h1 className="text-lg font-semibold text-gray-800">ChatApp</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button className="text-gray-600 hover:text-gray-800">
-                
-              </button>
-              
-              
+              {/* Mobile menu button */}
               <button 
-                onClick={() => setShowProfile(true)}
-                className="text-gray-600 hover:text-gray-800"
+                className="lg:hidden text-white hover:text-blue-200 p-1"
+                onClick={() => {
+                  // Toggle sidebar visibility on mobile
+                  const sidebar = document.querySelector('.sidebar');
+                  if (sidebar) {
+                    sidebar.classList.toggle('show');
+                    sidebar.classList.toggle('hidden');
+                  }
+                }}
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
+              {currentUser && (
+                <div className="relative">
+                  {currentUser.profile_picture ? (
+                    <img
+                      src={getFileUrl(currentUser.profile_picture)}
+                      alt="Profile"
+                      className="w-10 h-10 rounded-full object-cover border-2 border-white"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-medium border-2 border-white/30">
+                      {getInitials(currentUser)}
+                    </div>
+                  )}
+                  <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-white"></div>
+                </div>
+              )}
+              <div>
+                <h1 className="text-lg font-semibold text-white">ChatApp</h1>
+                <p className="text-blue-100 text-sm">
+                  {currentUser?.first_name ? `Hi, ${currentUser.first_name}` : 'Team Chat'}
+                </p>
               </div>
             </div>
+            <button 
+              onClick={() => setShowProfile(true)}
+              className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded"
+              title="Settings"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+          </div>
         </div>
 
-        {/* Search Bar - Sticky */}
-        <div className="px-4 py-3 bg-white border-b border-gray-200 flex-shrink-0 sticky top-16 z-10">
+        {/* Search Bar */}
+        <div className="px-4 py-3 bg-white border-b border-gray-200 flex-shrink-0">
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </div>
             <input
               type="text"
-              placeholder="Search or start new chat"
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-gray-50 placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-green-500 focus:border-green-500"
+              placeholder="Search users and groups..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
 
         {/* Create Group Button */}
         {canCreateGroup && (
-          <div className="px-4 py-3 border-b border-gray-200">
+          <div className="px-4 py-2 border-b border-gray-200">
             <button
               onClick={() => setShowGroupCreation(true)}
-              className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center"
+              className="w-full px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center justify-center text-sm"
             >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
               Create Group
@@ -697,9 +1024,23 @@ export default function ChatPage() {
         {/* Chat List - Scrollable */}
         <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
           {/* Group Chats */}
-          {chats
-            .filter(chat => chat.type === "group")
-            .map(chat => (
+          {(() => {
+            const filteredGroupChats = chats.filter(chat => {
+              if (chat.type !== "group") return false;
+              
+              // If no search query, show all group chats
+              if (!searchQuery.trim()) return true;
+              
+              // Search in group name and description
+              const searchLower = searchQuery.toLowerCase();
+              const groupName = (chat.group_name || '').toLowerCase();
+              const groupDescription = (chat.group_description || '').toLowerCase();
+              
+              return groupName.includes(searchLower) || 
+                     groupDescription.includes(searchLower);
+            });
+            
+            return filteredGroupChats.map(chat => (
               <div
                 key={chat.id}
                 onClick={() => openGroupChat(chat)}
@@ -725,13 +1066,9 @@ export default function ChatPage() {
                         const chatMessages = messages.filter(m => m.chat_id === chat.id);
                         if (chatMessages.length > 0) {
                           const lastMessage = chatMessages[chatMessages.length - 1];
-                          if (lastMessage && lastMessage.timestamp) {
-                            return new Date(lastMessage.timestamp).toLocaleTimeString('en-IN', { 
-                              hour: '2-digit', 
-                              minute: '2-digit',
-                              timeZone: 'Asia/Kolkata'
-                            });
-                          }
+                        if (lastMessage && lastMessage.timestamp) {
+                          return formatTimestamp(lastMessage.timestamp);
+                        }
                         }
                         return new Date().toLocaleTimeString('en-IN', { 
                           hour: '2-digit', 
@@ -751,107 +1088,171 @@ export default function ChatPage() {
                   </div>
                 </div>
               </div>
-            ))}
+            ));
+          })()}
 
-          {/* Direct Chats */}
-          {(() => {
-            const filteredUsers = users.filter(user => user._id !== myId);
-            console.log("Rendering users:", filteredUsers.length, "users");
-            return filteredUsers;
-          })()
-            .map(user => {
-              // Find the direct chat with this user
-              const userChat = chats.find(chat => 
-                chat.type === "direct" && 
-                chat.participants.includes(user._id) && 
-                chat.participants.includes(myId)
-              );
+           {/* Team Members */}
+           {(() => {
+             // Check if we have any search results
+             const hasGroupResults = chats.filter(chat => {
+               if (chat.type !== "group") return false;
+               if (!searchQuery.trim()) return true;
+               const searchLower = searchQuery.toLowerCase();
+               const groupName = (chat.group_name || '').toLowerCase();
+               const groupDescription = (chat.group_description || '').toLowerCase();
+               return groupName.includes(searchLower) || groupDescription.includes(searchLower);
+             }).length > 0;
+             
+             const hasUserResults = filteredUsers.length > 0;
+             
+             // Show no results message if searching and no results found
+             if (searchQuery.trim() && !hasGroupResults && !hasUserResults) {
+               return (
+                 <div className="flex flex-col items-center justify-center py-8 px-4">
+                   <svg className="w-12 h-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                   </svg>
+                   <p className="text-gray-500 text-sm text-center">
+                     No users or groups found for "{searchQuery}"
+                   </p>
+                   <button
+                     onClick={() => setSearchQuery("")}
+                     className="mt-2 text-blue-500 text-sm hover:text-blue-600"
+                   >
+                     Clear search
+                   </button>
+                 </div>
+               );
+             }
+             
+             return filteredUsers.map(user => {
+               // Find the direct chat with this user
+               const userChat = chats.find(chat => 
+                 chat.type === "direct" && 
+                 chat.participants.includes(user._id) && 
+                 chat.participants.includes(myId)
+               );
 
-              if (!userChat) return null;
-
-              return (
-                <div
-                  key={user._id}
-                  onClick={() => openDirectChat(user._id)}
-                  className={`flex items-center px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 transition-colors duration-150 ${
-                    activeChat?.id === userChat.id ? 'bg-gray-50' : ''
-                  }`}
-                >
-                  <div className="relative flex-shrink-0">
-                    {user.profile_picture ? (
-                      <img
-                        src={getFileUrl(user.profile_picture)}
-                        alt={getDisplayName(user)}
-                        className="w-12 h-12 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-semibold">
-                        {getInitials(user)}
-                      </div>
-                    )}
-                    {user.is_online && (
-                      <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></span>
-                    )}
-                  </div>
-                  <div className="ml-3 flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {getDisplayName(user)}
-                      </p>
-                        <p className="text-xs text-gray-500">
-                          {(() => {
-                            if (userChat) {
-                              const chatMessages = messages.filter(m => m.chat_id === userChat.id);
-                              if (chatMessages.length > 0) {
-                                const lastMessage = chatMessages[chatMessages.length - 1];
-                                if (lastMessage && lastMessage.timestamp) {
-                                  return new Date(lastMessage.timestamp).toLocaleTimeString('en-IN', { 
-                                    hour: '2-digit', 
-                                    minute: '2-digit',
-                                    timeZone: 'Asia/Kolkata'
-                                  });
-                                }
-                              }
-                            }
-                            return "Click to start chat";
-                          })()}
-                        </p>
-                    </div>
-                    <div className="flex items-center justify-between mt-1">
-                      <p className="text-sm text-gray-500 truncate">
-                        {user.is_typing ? (
-                          <span className="text-green-600 italic">typing...</span>
-                        ) : (
-                          <span className="text-gray-500">
-                            {userChat ? (lastMessages[userChat.id] || "Hey there! I am using ChatApp.") : "Click to start chatting"}
-                          </span>
-                        )}
-                      </p>
-                      {!user.is_typing && (
-                        <div className="flex items-center">
-                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+               return (
+                 <div
+                   key={user._id}
+                   className={`flex items-center px-4 py-3 hover:bg-gray-50 border-b border-gray-100 group ${
+                     activeChat?.id === userChat?.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
+                   }`}
+                 >
+                   <div className="relative flex-shrink-0">
+                     {user.profile_picture ? (
+                       <img
+                         src={getFileUrl(user.profile_picture)}
+                         alt={getDisplayName(user)}
+                         className="w-10 h-10 rounded-full object-cover"
+                       />
+                     ) : (
+                       <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium ${
+                         user.role === 'admin' ? 'bg-purple-500' : 'bg-blue-500'
+                       }`}>
+                         {getInitials(user)}
+                       </div>
+                     )}
+                     {user.is_online && (
+                       <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
+                     )}
+                   </div>
+                   <div 
+                     className="ml-3 flex-1 min-w-0 cursor-pointer"
+                     onClick={() => openDirectChat(user._id)}
+                   >
+                     <div className="flex items-center justify-between">
+                       <div className="flex items-center space-x-2">
+                         <p className="text-sm font-medium text-gray-900 truncate">
+                           {getDisplayName(user)}
+                         </p>
+                         {user.role === 'admin' && (
+                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">
+                             Admin
+                           </span>
+                         )}
+                       </div>
+                       <div className="flex items-center space-x-2">
+                         <p className="text-xs text-gray-500">
+                           {(() => {
+                             if (userChat) {
+                               const chatMessages = messages.filter(m => m.chat_id === userChat.id);
+                               if (chatMessages.length > 0) {
+                                 const lastMessage = chatMessages[chatMessages.length - 1];
+                          if (lastMessage && lastMessage.timestamp) {
+                            return formatTimestamp(lastMessage.timestamp);
+                          }
+                               }
+                             }
+                             
+                           })()}
+                         </p>
+                         {userChat && (
+                           <button
+                             onClick={(e) => {
+                               e.stopPropagation();
+                               if (window.confirm(`Are you sure you want to delete this chat with ${getDisplayName(user)}?`)) {
+                                 handleChatDelete(userChat.id);
+                               }
+                             }}
+                             className="opacity-0 group-hover:opacity-100 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-all"
+                             title="Delete chat"
+                           >
+                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                             </svg>
+                           </button>
+                         )}
+                       </div>
+                     </div>
+                     <div className="flex items-center justify-between mt-1">
+                       <p className="text-xs text-gray-500 truncate">
+                         {user.is_typing ? (
+                           <span className="text-blue-600 italic">typing...</span>
+                         ) : (
+                           <span className="text-gray-500">
+                             {userChat ? (lastMessages[userChat.id] || "Hey there! I am using ChatApp.") : "Start chatting"}
+                           </span>
+                         )}
+                       </p>
+                       {!user.is_typing && user.is_online && (
+                         <div className="flex items-center">
+                           <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                         </div>
+                       )}
+                     </div>
+                   </div>
+                 </div>
+               );
+             });
+           })()}
         </div>
       </div>
 
-      {/* WhatsApp Main Chat Area */}
-      <div className="flex-1 flex flex-col bg-gray-100 h-screen w-full">
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col bg-gray-50 h-screen w-full lg:relative relative">
           {activeChat ? (
           <>
-            {/* WhatsApp Chat Header - Sticky */}
-            <div className="bg-gray-50 px-4 py-3 border-b border-gray-300 flex items-center justify-between flex-shrink-0 sticky top-0 z-10">
+            {/* Chat Header */}
+            <div className="bg-white px-4 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center space-x-3">
-                {/* Mobile Menu Button */}
-                <button className="lg:hidden text-gray-600 hover:text-gray-800">
-                  {/* <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                  </svg> */}
+                {/* Mobile Back Button */}
+                <button 
+                  className="lg:hidden text-gray-600 hover:text-gray-800 p-1"
+                  onClick={() => {
+                    // Hide chat and show sidebar on mobile
+                    const sidebar = document.querySelector('.sidebar');
+                    if (sidebar) {
+                      sidebar.classList.add('show');
+                      sidebar.classList.remove('hidden');
+                    }
+                    setActiveChat(null);
+                  }}
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
                 </button>
                 <button className="text-gray-600 hover:text-gray-800">
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -859,23 +1260,23 @@ export default function ChatPage() {
                   </svg>
                 </button>
                 
-                {/* Chat Avatar */}
-                <div className="relative">
-                  {activeChat.type === "group" ? (
-                    <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
-                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
-                    </div>
-                  ) : (
-                    <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
-                      <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      </svg>
-                    </div>
-                  )}
-                  <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
-                </div>
+                 {/* Chat Avatar */}
+                 <div className="relative">
+                   {activeChat.type === "group" ? (
+                     <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
+                       <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                       </svg>
+                     </div>
+                   ) : (
+                     <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                       <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                       </svg>
+                     </div>
+                   )}
+                   <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
+                 </div>
                 
                 {/* Chat Info */}
                 <div>
@@ -921,6 +1322,21 @@ export default function ChatPage() {
                     </button>
                   )}
                   
+                  {/* Delete Chat Button */}
+                  <button 
+                    onClick={() => {
+                      if (window.confirm(`Are you sure you want to delete this chat?`)) {
+                        handleChatDelete(activeChat.id);
+                      }
+                    }}
+                    className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-full transition-all" 
+                    title="Delete Chat"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                  
                   <button className="text-gray-600 hover:text-gray-800" title="More Options">
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
@@ -939,13 +1355,39 @@ export default function ChatPage() {
             >
               {(() => {
                 console.log("Rendering messages:", messages.length, "messages for chat:", activeChat?.id);
-                return messages.map((message) => (
+                return messages.map((message, index) => {
+                  const previousMessage = index > 0 ? messages[index - 1] : null;
+                  const showDateSeparator = shouldShowDateSeparator(message, previousMessage);
+                  
+                  return (
+                    <React.Fragment key={message.id}>
+                      {showDateSeparator && (
+                        <div className="flex items-center justify-center my-4">
+                          <div className="bg-gray-200 text-gray-600 px-3 py-1 rounded-full text-sm font-medium">
+                            {formatMessageDate(message.timestamp)}
+                          </div>
+                        </div>
+                      )}
                       <MessageBubble
-                  key={message.id}
-                  message={message}
-                  isSelf={message.sender_id === myId}
-                />
-              ));
+                        message={message}
+                        isSelf={message.sender_id === myId}
+                        onCopy={handleMessageCopy}
+                        onDelete={handleMessageDelete}
+                        senderName={(() => {
+                          if (activeChat?.type === 'group' && message.sender_id !== myId) {
+                            // Find sender in users array
+                            const sender = users.find(user => user._id === message.sender_id);
+                            if (sender) {
+                              return getDisplayName(sender);
+                            }
+                          }
+                          return undefined;
+                        })()}
+                        isGroupChat={activeChat?.type === 'group'}
+                      />
+                    </React.Fragment>
+                  );
+                });
               })()}
               {otherUserTyping && (
                 <div className="flex items-center space-x-2 text-sm text-gray-500 mb-4">
@@ -960,67 +1402,67 @@ export default function ChatPage() {
                   <div ref={messagesEndRef} />
             </div>
             
-            {/* WhatsApp Message Input - Sticky */}
-            <div className="bg-white px-4 py-3 border-t border-gray-300 flex-shrink-0 sticky bottom-0 z-10">
-              {showFileUpload && (
-                <div className="mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  <FileUpload
-                    onFileUploaded={handleFileUpload}
-                    disabled={false}
-                  />
-                </div>
-              )}
-              
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => setShowFileUpload(!showFileUpload)}
-                  className="p-2 text-gray-600 hover:text-gray-800 rounded-full hover:bg-gray-100"
-                  title="Attach File"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                  </svg>
-                </button>
-                
-                <div className="flex-1 relative">
-                  <input 
-                  type="text"
-                    value={newMessage} 
-                  onChange={handleTyping}
-                  onKeyPress={handleKeyPress}
-                    placeholder="Type a message"
-                    className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50"
-                  />
-                  <button className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h1m4 0h1m-6-8h8a2 2 0 012 2v8a2 2 0 01-2 2H8a2 2 0 01-2-2V8a2 2 0 012-2z" />
-                    </svg>
-                  </button>
-                </div>
-                
-                    <button
-                  onClick={sendMessage}
-                  disabled={!newMessage.trim()}
-                  className="p-2 bg-green-500 text-white rounded-full hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                </button>
-              </div>
-        </div>
+             {/* Message Input */}
+             <div className="bg-white px-3 lg:px-4 py-3 border-t border-gray-200 flex-shrink-0">
+               {showFileUpload && (
+                 <div className="mb-3 p-3 bg-gray-50 rounded-md border border-gray-200">
+                   <FileUpload
+                     onFileUploaded={handleFileUpload}
+                     disabled={false}
+                   />
+                 </div>
+               )}
+               
+               <div className="flex items-center space-x-2">
+                 <button
+                   onClick={() => setShowFileUpload(!showFileUpload)}
+                   className="p-2 text-gray-500 hover:text-blue-600 rounded flex-shrink-0"
+                   title="Attach File"
+                 >
+                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                   </svg>
+                 </button>
+                 
+                 <div className="flex-1 relative min-w-0">
+                   <input 
+                     type="text"
+                     value={newMessage} 
+                     onChange={handleTyping}
+                     onKeyPress={handleKeyPress}
+                     placeholder="Type a message..."
+                     className="w-full px-3 lg:px-4 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm lg:text-base"
+                   />
+                   <button className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h1m4 0h1m-6-8h8a2 2 0 012 2v8a2 2 0 01-2 2H8a2 2 0 01-2-2V8a2 2 0 012-2z" />
+                     </svg>
+                   </button>
+                 </div>
+                 
+                 <button
+                   onClick={sendMessage}
+                   disabled={!newMessage.trim()}
+                   className="p-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                 >
+                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                   </svg>
+                 </button>
+               </div>
+         </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center bg-gray-100">
+          <div className="flex-1 flex items-center justify-center bg-gray-50">
             <div className="text-center max-w-md mx-auto p-8">
-              <div className="w-32 h-32 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
-                <svg className="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <div className="w-24 h-24 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg className="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
                 </svg>
               </div>
-                <h2 className="text-3xl font-bold text-gray-800 mb-3">ChatApp</h2>
-                <p className="text-gray-600 mb-8 text-lg">Send and receive messages in real-time with your team.</p>
-                <p className="text-gray-500 text-sm">A modern internal communication platform for seamless collaboration.</p>
+              <h2 className="text-2xl font-semibold text-gray-800 mb-3">Welcome to ChatApp</h2>
+              <p className="text-gray-600 mb-4">Connect with your team members</p>
+              <p className="text-gray-500 text-sm">Select a team member from the sidebar to start chatting</p>
             </div>
         </div>
         )}
@@ -1047,5 +1489,6 @@ export default function ChatPage() {
         />
       )}
     </div>
+    </>
   );
 }

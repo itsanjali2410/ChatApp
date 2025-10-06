@@ -18,11 +18,11 @@ class FileAttachment(BaseModel):
     size: int
 
 class ChatMessage(BaseModel):
-    id: Optional[str]
+    id: Optional[str] = None
     chat_id: str
     sender_id: str
     message: str
     message_type: str  # "text", "image", "file"
     attachment: Optional[FileAttachment] = None
     status: MessageStatus = MessageStatus.sent
-    timestamp: datetime = datetime.now(ZoneInfo("Asia/Kolkata"))
+    timestamp: Optional[datetime] = None

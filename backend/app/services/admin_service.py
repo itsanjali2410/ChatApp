@@ -42,3 +42,22 @@ def update_admin(admin_id: str, updates: dict):
     """Update admin by ID"""
     result = admin_collection.update_one({"_id": ObjectId(admin_id)}, {"$set": updates})
     return result.modified_count > 0
+
+def get_admins_by_org(org_id: str):
+    """Get all admins in a specific organization"""
+    admins = []
+    for admin in admin_collection.find({"organization_id": org_id}):
+        admin["_id"] = str(admin["_id"])
+        # Add role field to distinguish from regular users
+        admin["role"] = "admin"
+        
+        # Add missing fields that frontend expects for user display
+        admin["first_name"] = admin.get("first_name") or admin.get("username", "").split()[0] if admin.get("username") else ""
+        admin["last_name"] = admin.get("last_name") or ""
+        admin["profile_picture"] = admin.get("profile_picture")
+        admin["is_online"] = admin.get("is_online", False)
+        admin["is_typing"] = admin.get("is_typing", False)
+        admin["current_chat_id"] = admin.get("current_chat_id")
+        
+        admins.append(admin)
+    return admins

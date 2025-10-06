@@ -13,7 +13,8 @@ class ConnectionManager:
         self.user_current_chat: Dict[str, str] = {}
 
     async def connect(self, websocket: WebSocket, user_id: str):
-        await websocket.accept()
+        if websocket.client_state == WebSocketState.CONNECTING:
+            await websocket.accept()
         self.active_connections[user_id] = websocket
         print(f"User {user_id} connected")
 
