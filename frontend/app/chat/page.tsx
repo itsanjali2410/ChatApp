@@ -1066,8 +1066,8 @@ export default function ChatPage() {
         }
       `}</style>
       <div className="h-screen bg-[var(--background)] flex flex-col lg:flex-row overflow-hidden relative">
-      {/* Mobile Header - Only visible on mobile when sidebar is closed */}
-      <div className={`lg:hidden bg-[var(--secondary)] border-b border-[var(--border)] px-4 py-3 flex items-center justify-between shadow-sm transition-opacity duration-300 ${showSidebar ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      {/* Mobile Header - Only visible on mobile when sidebar is closed or when in chat */}
+      <div className={`lg:hidden bg-[var(--secondary)] border-b border-[var(--border)] px-4 py-3 flex items-center justify-between shadow-sm transition-opacity duration-300 ${showSidebar && !activeChat ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <button
           onClick={() => setShowSidebar(!showSidebar)}
           className="text-[var(--text-secondary)] hover:text-[var(--accent)] p-2 rounded-lg hover:bg-[var(--secondary-hover)] transition-all duration-200"
@@ -1110,11 +1110,13 @@ export default function ChatPage() {
           </div>
         </div>
       )}
-      {/* Mobile Overlay - Hidden on mobile when sidebar is open, only for desktop */}
-      <div 
-        className={`fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden transition-opacity duration-300 ${showSidebar ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
-        onClick={() => setShowSidebar(false)}
-      />
+      {/* Mobile Overlay - Only show when sidebar is open and no active chat */}
+      {showSidebar && !activeChat && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden transition-opacity duration-300"
+          onClick={() => setShowSidebar(false)}
+        />
+      )}
 
       {/* Sidebar */}
       <div className={`${showSidebar ? 'sidebar show translate-x-0' : 'sidebar hidden -translate-x-full'} lg:translate-x-0 fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto w-full lg:w-80 bg-[var(--chat-sidebar)] border-r border-[var(--border)] flex flex-col transition-transform duration-300 ease-in-out shadow-lg`}>
@@ -1475,7 +1477,7 @@ export default function ChatPage() {
       </div>
 
       {/* Main Chat Area */}
-      <div className={`flex-1 flex flex-col bg-[var(--chat-bg)] min-h-0 h-screen w-full lg:relative relative overflow-hidden transition-opacity duration-300 ${showSidebar ? 'lg:opacity-100 opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`flex-1 flex flex-col bg-[var(--chat-bg)] min-h-0 h-screen w-full lg:relative relative overflow-hidden transition-opacity duration-300 ${showSidebar && !activeChat ? 'lg:opacity-100 opacity-0 pointer-events-none' : 'opacity-100'}`}>
           {activeChat ? (
           <>
             {/* Chat Header */}
