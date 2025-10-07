@@ -423,12 +423,12 @@ export default function MessageBubble({ message, isSelf, isTemp = false, onDelet
 
   return (
     <>
-      <div className={`flex ${isSelf ? 'justify-end' : 'justify-start'} mb-1 relative`}>
-        <div className={`${isSelf ? 'items-end' : 'items-start'} flex flex-col`}>
+      <div className={`flex ${isSelf ? 'justify-end' : 'justify-start'} mb-3 relative`}>
+        <div className={`${isSelf ? 'items-end' : 'items-start'} flex flex-col max-w-[80%]`}>
           {/* Sender name for group chats */}
           {isGroupChat && !isSelf && senderName && (
-            <div className="mb-1 ml-1">
-              <span className="text-xs font-medium text-gray-600">
+            <div className="mb-2 ml-2">
+              <span className="text-xs font-semibold text-slate-600">
                 {senderName}
               </span>
             </div>
@@ -436,15 +436,15 @@ export default function MessageBubble({ message, isSelf, isTemp = false, onDelet
           
           <div
             ref={messageRef}
-            className={`${isImageMessage ? 'max-w-sm lg:max-w-lg' : 'max-w-xs lg:max-w-md'} px-3 py-2 rounded-lg ${isSelf
-                ? 'bg-green-500 text-white'
-                : 'bg-white shadow-sm'
-              } ${isTemp ? 'opacity-70' : ''} ${isImageMessage ? 'p-1' : ''
-              } relative group ${isLongPressing ? 'scale-105 shadow-lg' : ''}`}
+            className={`${isImageMessage ? 'max-w-sm lg:max-w-lg' : 'max-w-xs lg:max-w-md'} px-4 py-3 rounded-lg ${isSelf
+                ? 'bg-[#D4AF37] text-[#0D0D0D]'
+                : 'bg-[#121212] border border-[#D4AF37]'
+              } ${isTemp ? 'opacity-70' : ''} ${isImageMessage ? 'p-2' : ''
+              } relative group ${isLongPressing ? 'scale-105' : ''} transition-all duration-200`}
             style={{
               borderRadius: isSelf
-                ? '18px 18px 4px 18px'
-                : '18px 18px 18px 4px'
+                ? '20px 20px 6px 20px'
+                : '20px 20px 20px 6px'
             }}
             onContextMenu={handleContextMenu}
             onTouchStart={handleTouchStart}
@@ -484,12 +484,12 @@ export default function MessageBubble({ message, isSelf, isTemp = false, onDelet
           )}
 
           {message.message && (
-            <div className="text-sm">{message.message}</div>
+            <div className="text-sm leading-relaxed font-medium">{message.message}</div>
           )}
 
           {renderAttachment()}
 
-          <div className={`text-xs mt-1 flex items-center justify-end ${isSelf ? 'text-green-100' : 'text-gray-500'
+          <div className={`text-xs mt-2 flex items-center justify-end ${isSelf ? 'text-[#0D0D0D]/70' : 'text-[#C0C0C0]'
             }`}>
             <span className="flex items-center space-x-1">
               <span>{(() => {

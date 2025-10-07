@@ -243,7 +243,7 @@ pm2 startup
 
 ### 5.1 Get SSL Certificate
 ```bash
-sudo certbot --nginx -d chatapp.tripstarsholidays.com
+sudo certbot --nginx -d chatapp.tripstarsholidays.com 
 ```
 
 ### 5.2 Auto-renewal

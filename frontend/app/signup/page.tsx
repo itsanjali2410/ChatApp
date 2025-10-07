@@ -115,27 +115,27 @@ function SignupForm() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo/Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-full mb-4">
-            <span className="text-2xl text-white">💬</span>
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-[#D4AF37] to-[#FFD700] rounded-full mb-4 shadow-lg">
+            <span className="text-2xl text-[#0D0D0D]">💬</span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Create your account</h1>
-          <p className="text-gray-600">Join your organization or create a new one</p>
+          <h1 className="text-3xl font-bold text-[#EAEAEA] mb-2">Create your account</h1>
+          <p className="text-[#C0C0C0]">Join your organization or create a new one</p>
         </div>
 
         {/* Signup Form */}
-        <div className="bg-white rounded-xl shadow-lg p-8">
+        <div className="bg-[#121212] rounded-xl border border-[#D4AF37] p-8">
 
           {/* Mode Selection */}
           <div className="flex gap-2 mb-6">
             <button
               className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 mode === "normal" 
-                  ? "bg-blue-600 text-white" 
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  ? "bg-[#D4AF37] text-[#0D0D0D]" 
+                  : "bg-[#1A1A1A] text-[#C0C0C0] hover:bg-[#2A2A2A]"
               }`}
               onClick={() => setMode("normal")}
             >
@@ -144,8 +144,8 @@ function SignupForm() {
             <button
               className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 mode === "invite" 
-                  ? "bg-blue-600 text-white" 
-                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  ? "bg-[#D4AF37] text-[#0D0D0D]" 
+                  : "bg-[#1A1A1A] text-[#C0C0C0] hover:bg-[#2A2A2A]"
               }`}
               onClick={() => setMode("invite")}
             >
@@ -154,23 +154,23 @@ function SignupForm() {
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+            <div className="mb-4 p-3 bg-red-900/20 border border-red-500 rounded-lg text-sm text-red-400">
               {error}
             </div>
           )}
           {success && (
-            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+            <div className="mb-4 p-3 bg-green-900/20 border border-green-500 rounded-lg text-sm text-green-400">
               {success}
             </div>
           )}
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-[#EAEAEA] mb-1">
                 Username
               </label>
               <input
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                className="w-full px-4 py-3 border border-[#D4AF37] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/20 focus:border-[#D4AF37] transition-colors bg-[#0D0D0D] text-[#EAEAEA] placeholder-[#C0C0C0]"
                 type="text"
                 placeholder="Enter your username"
                 value={username}
@@ -179,11 +179,11 @@ function SignupForm() {
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-[#EAEAEA] mb-1">
                 Email Address
               </label>
               <input
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                className="w-full px-4 py-3 border border-[#D4AF37] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/20 focus:border-[#D4AF37] transition-colors bg-[#0D0D0D] text-[#EAEAEA] placeholder-[#C0C0C0]"
                 type="email"
                 placeholder="Enter your email"
                 value={email}
@@ -193,16 +193,16 @@ function SignupForm() {
                 }}
               />
               {checkingEmail && (
-                <p className="text-sm text-blue-600 mt-1">Checking email...</p>
+                <p className="text-sm text-[#D4AF37] mt-1">Checking email...</p>
               )}
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-[#EAEAEA] mb-1">
                 Password
               </label>
               <input
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                className="w-full px-4 py-3 border border-[#D4AF37] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/20 focus:border-[#D4AF37] transition-colors bg-[#0D0D0D] text-[#EAEAEA] placeholder-[#C0C0C0]"
                 type="password"
                 placeholder="Create a password (min 6 chars)"
                 value={password}
@@ -211,21 +211,21 @@ function SignupForm() {
             </div>
 
             {needOrgSetup && (
-              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="mt-6 p-4 bg-[#1A1A1A] border border-[#D4AF37] rounded-lg">
                 <div className="flex items-center mb-3">
-                  <span className="text-blue-600 mr-2">ℹ️</span>
-                  <h3 className="font-medium text-blue-900">Create Your Organization</h3>
+                  <span className="text-[#D4AF37] mr-2">ℹ️</span>
+                  <h3 className="font-medium text-[#EAEAEA]">Create Your Organization</h3>
                 </div>
-                <p className="text-sm text-blue-700 mb-4">
+                <p className="text-sm text-[#C0C0C0] mb-4">
                   We don't recognize this email. Create your organization to continue.
                 </p>
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-[#EAEAEA] mb-1">
                       Organization Name *
                     </label>
                     <input
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-[#D4AF37] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/20 focus:border-[#D4AF37] bg-[#0D0D0D] text-[#EAEAEA] placeholder-[#C0C0C0]"
                       type="text"
                       placeholder="Enter organization name"
                       value={orgName}
@@ -233,11 +233,11 @@ function SignupForm() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-[#EAEAEA] mb-1">
                       Description (optional)
                     </label>
                     <input
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-[#D4AF37] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/20 focus:border-[#D4AF37] bg-[#0D0D0D] text-[#EAEAEA] placeholder-[#C0C0C0]"
                       type="text"
                       placeholder="Brief description of your organization"
                       value={orgDescription}
@@ -245,11 +245,11 @@ function SignupForm() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-[#EAEAEA] mb-1">
                       Address (optional)
                     </label>
                     <input
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-[#D4AF37] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/20 focus:border-[#D4AF37] bg-[#0D0D0D] text-[#EAEAEA] placeholder-[#C0C0C0]"
                       type="text"
                       placeholder="Organization address"
                       value={orgAddress}
@@ -257,11 +257,11 @@ function SignupForm() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-[#EAEAEA] mb-1">
                       Website (optional)
                     </label>
                     <input
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-[#D4AF37] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/20 focus:border-[#D4AF37] bg-[#0D0D0D] text-[#EAEAEA] placeholder-[#C0C0C0]"
                       type="text"
                       placeholder="https://your-website.com"
                       value={orgWebsite}
@@ -273,18 +273,18 @@ function SignupForm() {
             )}
 
             {mode === "invite" && (
-              <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="mt-6 p-4 bg-[#1A1A1A] border border-[#D4AF37] rounded-lg">
                 <div className="flex items-center mb-3">
-                  <span className="text-green-600 mr-2">🎫</span>
-                  <h3 className="font-medium text-green-900">Join with Invite</h3>
+                  <span className="text-[#D4AF37] mr-2">🎫</span>
+                  <h3 className="font-medium text-[#EAEAEA]">Join with Invite</h3>
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-[#EAEAEA] mb-1">
                       Organization ID
                     </label>
                     <input
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                      className="w-full px-3 py-2 border border-[#D4AF37] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/20 focus:border-[#D4AF37] bg-[#0D0D0D] text-[#EAEAEA] placeholder-[#C0C0C0]"
                       type="text"
                       placeholder="Enter organization ID"
                       value={orgId}
@@ -292,11 +292,11 @@ function SignupForm() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-[#EAEAEA] mb-1">
                       Invite Token
                     </label>
                     <input
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                      className="w-full px-3 py-2 border border-[#D4AF37] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/20 focus:border-[#D4AF37] bg-[#0D0D0D] text-[#EAEAEA] placeholder-[#C0C0C0]"
                       type="text"
                       placeholder="Enter invite token"
                       value={token}
@@ -309,13 +309,13 @@ function SignupForm() {
           </div>
 
           <button
-            className="w-full mt-6 bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+            className="w-full mt-6 bg-gradient-to-r from-[#D4AF37] to-[#FFD700] text-[#0D0D0D] py-3 rounded-lg font-medium hover:from-[#FFD700] hover:to-[#FFA500] disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl"
             onClick={handleSignup}
             disabled={loading || checkingEmail}
           >
             {loading ? (
               <div className="flex items-center justify-center">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#0D0D0D] mr-2"></div>
                 {needOrgSetup ? "Creating organization..." : "Signing up..."}
               </div>
             ) : (
@@ -324,10 +324,10 @@ function SignupForm() {
           </button>
 
           <div className="mt-6 text-center">
-            <p className="text-gray-600">
+            <p className="text-[#C0C0C0]">
               Already have an account?{" "}
               <a 
-                className="text-blue-600 hover:text-blue-700 font-medium transition-colors" 
+                className="text-[#D4AF37] hover:text-[#FFD700] font-medium transition-colors" 
                 href="/login"
               >
                 Log in
@@ -337,7 +337,7 @@ function SignupForm() {
         </div>
 
         {/* Footer */}
-        <div className="text-center mt-8 text-sm text-gray-500">
+        <div className="text-center mt-8 text-sm text-[#C0C0C0]">
           <p>© 2024 ChatApp. All rights reserved.</p>
         </div>
       </div>
@@ -348,11 +348,11 @@ function SignupForm() {
 export default function SignupPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-center p-4">
         <div className="w-full max-w-md">
-          <div className="bg-white rounded-xl shadow-lg p-8 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading...</p>
+          <div className="bg-[#121212] rounded-xl border border-[#D4AF37] p-8 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#D4AF37] mx-auto mb-4"></div>
+            <p className="text-[#C0C0C0]">Loading...</p>
           </div>
         </div>
       </div>

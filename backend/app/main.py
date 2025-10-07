@@ -61,7 +61,10 @@ app.include_router(admin_routes, tags=["Admin"])
 @app.get("/")
 def root():
     return {"message": "Welcome to the Internal Chat Application API"}
-
+    
+@app.get("/api/")
+def api_root():
+    return {"message": "API is working"}
 
 @app.on_event("startup")
 def on_startup():

@@ -238,8 +238,8 @@ export default function ChatPage() {
         
         // Load current user profile (handle both users and admins)
         try {
-          const resProfile = await api.get("/users/profile/me");
-          setCurrentUser(resProfile.data);
+        const resProfile = await api.get("/users/profile/me");
+        setCurrentUser(resProfile.data);
         } catch (profileError) {
           // If user profile fails, try admin profile
           try {
@@ -427,16 +427,16 @@ export default function ChatPage() {
       setActiveChat(newChat);
       console.log("Set active chat to:", newChat);
       
-       // Join the chat via WebSocket
-       if (isConnected) {
-         console.log("Joining chat via WebSocket...");
+      // Join the chat via WebSocket
+      if (isConnected) {
+        console.log("Joining chat via WebSocket...");
          sendWSMessage({
-           type: "join_chat",
-           chat_id: newChat.id
+          type: "join_chat",
+          chat_id: newChat.id
          });
-       } else {
-         console.log("WebSocket not connected, cannot join chat");
-       }
+      } else {
+        console.log("WebSocket not connected, cannot join chat");
+      }
     } catch (e: any) {
       console.error("Error creating chat:", e);
       
@@ -447,8 +447,8 @@ export default function ChatPage() {
           window.location.href = "/login";
         }, 2000);
       } else {
-        const detail = e?.response?.data?.detail || "Failed to create chat";
-        setError(detail);
+      const detail = e?.response?.data?.detail || "Failed to create chat";
+      setError(detail);
       }
     }
   };
@@ -457,13 +457,13 @@ export default function ChatPage() {
     console.log("Opening group chat:", chat);
     setActiveChat(chat);
     
-     // Join the chat via WebSocket
-     if (isConnected) {
+    // Join the chat via WebSocket
+    if (isConnected) {
        sendWSMessage({
-         type: "join_chat",
-         chat_id: chat.id
+        type: "join_chat",
+        chat_id: chat.id
        });
-     }
+    }
   };
 
   const handleGroupCreated = (newGroup: any) => {
@@ -480,13 +480,13 @@ export default function ChatPage() {
     
     setActiveChat(newGroup);
     
-     // Join the chat via WebSocket
-     if (isConnected) {
+    // Join the chat via WebSocket
+    if (isConnected) {
        sendWSMessage({
-         type: "join_chat",
-         chat_id: newGroup.id
+        type: "join_chat",
+        chat_id: newGroup.id
        });
-     }
+    }
   };
 
   const handleGroupUpdated = () => {
@@ -603,26 +603,26 @@ export default function ChatPage() {
         [activeChat.id]: newMessage.trim()
       }));
       
-       // Send via WebSocket for real-time delivery
-       if (isConnected) {
+      // Send via WebSocket for real-time delivery
+      if (isConnected) {
          sendWSMessage({
-           type: "message",
-           chat_id: activeChat.id,
-           message: newMessage.trim(),
-           timestamp: sentMessage.timestamp
+          type: "message",
+          chat_id: activeChat.id,
+          message: newMessage.trim(),
+          timestamp: sentMessage.timestamp
          });
-       }
+      }
       
       setNewMessage("");
       
-       // Stop typing indicator
-       if (isConnected) {
+      // Stop typing indicator
+      if (isConnected) {
          sendWSMessage({
-           type: "typing",
-           chat_id: activeChat.id,
-           is_typing: false
+          type: "typing",
+          chat_id: activeChat.id,
+          is_typing: false
          });
-       }
+      }
       setIsTyping(false);
       
     } catch (e: any) {
@@ -636,8 +636,8 @@ export default function ChatPage() {
           window.location.href = "/login";
         }, 2000);
       } else {
-        const detail = e?.response?.data?.detail || "Failed to send message";
-        setError(detail);
+      const detail = e?.response?.data?.detail || "Failed to send message";
+      setError(detail);
       }
     }
   };
@@ -652,31 +652,31 @@ export default function ChatPage() {
   const handleTyping = (e: React.ChangeEvent<HTMLInputElement>) => {
     setNewMessage(e.target.value);
     
-     if (!isTyping && activeChat && isConnected) {
-       setIsTyping(true);
+    if (!isTyping && activeChat && isConnected) {
+      setIsTyping(true);
        sendWSMessage({
-         type: "typing",
-         chat_id: activeChat.id,
-         is_typing: true
+        type: "typing",
+        chat_id: activeChat.id,
+        is_typing: true
        });
-     }
+    }
     
     // Clear existing timeout
     if (window.typingTimeout) {
       clearTimeout(window.typingTimeout);
     }
     
-     // Set new timeout to stop typing indicator
-     window.typingTimeout = setTimeout(() => {
-       if (isConnected && activeChat) {
+    // Set new timeout to stop typing indicator
+    window.typingTimeout = setTimeout(() => {
+      if (isConnected && activeChat) {
          sendWSMessage({
-           type: "typing",
-           chat_id: activeChat.id,
-           is_typing: false
+          type: "typing",
+      chat_id: activeChat.id,
+          is_typing: false
          });
-       }
-       setIsTyping(false);
-     }, 1000);
+      }
+      setIsTyping(false);
+    }, 1000);
   };
 
   const handleFileUpload = (fileData: any) => {
@@ -876,6 +876,12 @@ export default function ChatPage() {
   return (
     <>
       <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+        }
+        
         @media (max-width: 1024px) {
           .sidebar {
             transform: translateX(-100%);
@@ -889,29 +895,29 @@ export default function ChatPage() {
           }
         }
       `}</style>
-      <div className="min-h-screen bg-gray-50 flex flex-col lg:flex-row">
+      <div className="min-h-screen bg-[#0D0D0D] flex flex-col lg:flex-row">
       {/* Popup Notification */}
       {showPopupNotification && popupMessage && (
-        <div className="fixed top-4 right-4 z-50 bg-white rounded-lg shadow-lg border border-gray-200 p-4 max-w-sm">
-          <div className="flex items-start space-x-3">
+        <div className="fixed top-6 right-6 z-50 bg-[#121212] rounded-lg shadow-2xl border border-[#D4AF37] p-6 max-w-sm animate-in slide-in-from-right-5 duration-300">
+          <div className="flex items-start space-x-4">
             <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-10 h-10 bg-[#D4AF37] rounded-lg flex items-center justify-center">
+                <svg className="w-5 h-5 text-[#0D0D0D]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
               </div>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">
+              <p className="text-sm font-semibold text-[#EAEAEA] mb-1">
                 {popupMessage.sender}
               </p>
-              <p className="text-sm text-gray-600 truncate">
+              <p className="text-sm text-[#C0C0C0] leading-relaxed">
                 {popupMessage.message}
               </p>
             </div>
             <button
               onClick={() => setShowPopupNotification(false)}
-              className="flex-shrink-0 text-gray-400 hover:text-gray-600"
+              className="flex-shrink-0 text-[#C0C0C0] hover:text-[#D4AF37] transition-colors duration-200 p-1 rounded-lg hover:bg-[#1A1A1A]"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -921,14 +927,14 @@ export default function ChatPage() {
         </div>
       )}
       {/* Sidebar */}
-      <div className="sidebar w-full lg:w-80 bg-white border-r border-gray-200 flex flex-col h-screen lg:relative absolute z-40 lg:z-auto">
+      <div className="sidebar w-full lg:w-80 bg-[#121212] border-r border-[#D4AF37] flex flex-col h-screen lg:relative absolute z-40 lg:z-auto">
         {/* Header */}
-        <div className="bg-blue-600 px-4 py-3 flex-shrink-0">
+        <div className="bg-[#0D0D0D] px-6 py-4 flex-shrink-0 border-b border-[#D4AF37]">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               {/* Mobile menu button */}
               <button 
-                className="lg:hidden text-white hover:text-blue-200 p-1"
+                className="lg:hidden text-[#C0C0C0] hover:text-[#D4AF37] hover:bg-[#1A1A1A] p-2 rounded-lg transition-all duration-200"
                 onClick={() => {
                   // Toggle sidebar visibility on mobile
                   const sidebar = document.querySelector('.sidebar');
@@ -938,51 +944,51 @@ export default function ChatPage() {
                   }
                 }}
               >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
-              {currentUser && (
+          {currentUser && (
                 <div className="relative">
-                  {currentUser.profile_picture ? (
-                    <img
+              {currentUser.profile_picture ? (
+                <img
                       src={getFileUrl(currentUser.profile_picture)}
-                      alt="Profile"
-                      className="w-10 h-10 rounded-full object-cover border-2 border-white"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-medium border-2 border-white/30">
-                      {getInitials(currentUser)}
-                    </div>
-                  )}
-                  <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-white"></div>
+                  alt="Profile"
+                      className="w-12 h-12 rounded-lg object-cover border-2 border-[#D4AF37]"
+                />
+              ) : (
+                    <div className="w-12 h-12 rounded-lg bg-[#D4AF37] flex items-center justify-center text-[#0D0D0D] font-semibold border-2 border-[#D4AF37]">
+                  {getInitials(currentUser)}
                 </div>
               )}
-              <div>
-                <h1 className="text-lg font-semibold text-white">ChatApp</h1>
-                <p className="text-blue-100 text-sm">
+                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[#D4AF37] rounded-full border-2 border-[#0D0D0D]"></div>
+                </div>
+              )}
+              <div className="ml-2">
+                <h1 className="text-xl font-bold text-[#EAEAEA] tracking-tight">ChatApp</h1>
+                <p className="text-[#C0C0C0] text-sm font-medium">
                   {currentUser?.first_name ? `Hi, ${currentUser.first_name}` : 'Team Chat'}
                 </p>
-              </div>
             </div>
-            <button 
-              onClick={() => setShowProfile(true)}
-              className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded"
+            </div>
+              <button 
+                onClick={() => setShowProfile(true)}
+              className="p-2.5 text-[#C0C0C0] hover:text-[#D4AF37] hover:bg-[#1A1A1A] rounded-lg transition-all duration-200"
               title="Settings"
-            >
+              >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
-          </div>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
+            </div>
         </div>
 
         {/* Search Bar */}
-        <div className="px-4 py-3 bg-white border-b border-gray-200 flex-shrink-0">
+        <div className="px-6 py-4 bg-[#0D0D0D] border-b border-[#D4AF37] flex-shrink-0">
           <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <svg className="h-5 w-5 text-[#C0C0C0]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </div>
@@ -991,12 +997,12 @@ export default function ChatPage() {
               placeholder="Search users and groups..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md text-sm placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+              className="block w-full pl-12 pr-12 py-3.5 border border-[#D4AF37] rounded-lg text-sm placeholder-[#C0C0C0] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/20 focus:border-[#D4AF37] bg-[#121212] transition-all duration-200"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                className="absolute inset-y-0 right-0 pr-4 flex items-center text-[#C0C0C0] hover:text-[#D4AF37] transition-colors duration-200 p-1 rounded-lg hover:bg-[#1A1A1A]"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1008,12 +1014,12 @@ export default function ChatPage() {
 
         {/* Create Group Button */}
         {canCreateGroup && (
-          <div className="px-4 py-2 border-b border-gray-200">
+          <div className="px-6 py-3 border-b border-[#D4AF37]">
             <button
               onClick={() => setShowGroupCreation(true)}
-              className="w-full px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center justify-center text-sm"
+              className="w-full px-4 py-3 bg-[#D4AF37] text-[#0D0D0D] rounded-lg hover:bg-[#FFD700] flex items-center justify-center text-sm font-semibold transition-all duration-200"
             >
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
               Create Group
@@ -1022,7 +1028,7 @@ export default function ChatPage() {
         )}
 
         {/* Chat List - Scrollable */}
-        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gold scrollbar-track-black">
           {/* Group Chats */}
           {(() => {
             const filteredGroupChats = chats.filter(chat => {
@@ -1044,31 +1050,31 @@ export default function ChatPage() {
               <div
                 key={chat.id}
                 onClick={() => openGroupChat(chat)}
-                className={`flex items-center px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 transition-colors duration-150 ${
-                  activeChat?.id === chat.id ? 'bg-gray-50' : ''
+                className={`flex items-center px-6 py-4 hover:bg-[#1A1A1A] cursor-pointer border-b border-[#D4AF37]/20 transition-all duration-200 group ${
+                  activeChat?.id === chat.id ? 'bg-[#1A1A1A] border-l-4 border-l-[#D4AF37]' : ''
                 }`}
               >
                 <div className="relative flex-shrink-0">
-                  <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center text-white font-semibold">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="w-14 h-14 rounded-lg bg-[#D4AF37] flex items-center justify-center text-[#0D0D0D] font-bold">
+                    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
                   </div>
                 </div>
-                <div className="ml-3 flex-1 min-w-0">
+                <div className="ml-4 flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-gray-900 truncate">
+                    <p className="text-base font-semibold text-[#EAEAEA] truncate">
                       {chat.group_name}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-[#C0C0C0] font-medium">
                       {(() => {
                         // Find the most recent message for this chat
                         const chatMessages = messages.filter(m => m.chat_id === chat.id);
                         if (chatMessages.length > 0) {
                           const lastMessage = chatMessages[chatMessages.length - 1];
-                        if (lastMessage && lastMessage.timestamp) {
+                          if (lastMessage && lastMessage.timestamp) {
                           return formatTimestamp(lastMessage.timestamp);
-                        }
+                          }
                         }
                         return new Date().toLocaleTimeString('en-IN', { 
                           hour: '2-digit', 
@@ -1078,12 +1084,12 @@ export default function ChatPage() {
                       })()}
                     </p>
                   </div>
-                  <div className="flex items-center justify-between mt-1">
-                    <p className="text-sm text-gray-500 truncate">
+                  <div className="flex items-center justify-between mt-2">
+                    <p className="text-sm text-[#C0C0C0] truncate font-medium">
                       {lastMessages[chat.id] || `${chat.participants.length} members`}
                     </p>
                     <div className="flex items-center">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <div className="w-2.5 h-2.5 bg-[#D4AF37] rounded-full"></div>
                     </div>
                   </div>
                 </div>
@@ -1092,7 +1098,7 @@ export default function ChatPage() {
           })()}
 
            {/* Team Members */}
-           {(() => {
+          {(() => {
              // Check if we have any search results
              const hasGroupResults = chats.filter(chat => {
                if (chat.type !== "group") return false;
@@ -1108,16 +1114,21 @@ export default function ChatPage() {
              // Show no results message if searching and no results found
              if (searchQuery.trim() && !hasGroupResults && !hasUserResults) {
                return (
-                 <div className="flex flex-col items-center justify-center py-8 px-4">
-                   <svg className="w-12 h-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                   </svg>
-                   <p className="text-gray-500 text-sm text-center">
-                     No users or groups found for "{searchQuery}"
+                 <div className="flex flex-col items-center justify-center py-12 px-6">
+                   <div className="w-16 h-16 bg-[#1A1A1A] rounded-lg flex items-center justify-center mb-4 border border-[#D4AF37]">
+                     <svg className="w-8 h-8 text-[#C0C0C0]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                     </svg>
+                   </div>
+                   <p className="text-[#EAEAEA] text-base font-medium text-center mb-2">
+                     No users or groups found
+                   </p>
+                   <p className="text-[#C0C0C0] text-sm text-center mb-4">
+                     Try searching with different keywords
                    </p>
                    <button
                      onClick={() => setSearchQuery("")}
-                     className="mt-2 text-blue-500 text-sm hover:text-blue-600"
+                     className="px-4 py-2 bg-[#D4AF37] text-[#0D0D0D] text-sm font-medium rounded-lg hover:bg-[#FFD700] transition-colors duration-200"
                    >
                      Clear search
                    </button>
@@ -1126,68 +1137,68 @@ export default function ChatPage() {
              }
              
              return filteredUsers.map(user => {
-               // Find the direct chat with this user
-               const userChat = chats.find(chat => 
-                 chat.type === "direct" && 
-                 chat.participants.includes(user._id) && 
-                 chat.participants.includes(myId)
-               );
+              // Find the direct chat with this user
+              const userChat = chats.find(chat => 
+                chat.type === "direct" && 
+                chat.participants.includes(user._id) && 
+                chat.participants.includes(myId)
+              );
 
-               return (
-                 <div
-                   key={user._id}
-                   className={`flex items-center px-4 py-3 hover:bg-gray-50 border-b border-gray-100 group ${
-                     activeChat?.id === userChat?.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
-                   }`}
-                 >
-                   <div className="relative flex-shrink-0">
-                     {user.profile_picture ? (
-                       <img
-                         src={getFileUrl(user.profile_picture)}
-                         alt={getDisplayName(user)}
-                         className="w-10 h-10 rounded-full object-cover"
-                       />
-                     ) : (
-                       <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium ${
-                         user.role === 'admin' ? 'bg-purple-500' : 'bg-blue-500'
+              return (
+                <div
+                  key={user._id}
+                   className={`flex items-center px-6 py-4 hover:bg-[#1A1A1A] border-b border-[#D4AF37]/20 group transition-all duration-200 ${
+                     activeChat?.id === userChat?.id ? 'bg-[#1A1A1A] border-l-4 border-l-[#D4AF37]' : ''
+                  }`}
+                >
+                  <div className="relative flex-shrink-0">
+                    {user.profile_picture ? (
+                      <img
+                        src={getFileUrl(user.profile_picture)}
+                        alt={getDisplayName(user)}
+                         className="w-12 h-12 rounded-lg object-cover border border-[#D4AF37]"
+                      />
+                    ) : (
+                       <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-[#0D0D0D] text-sm font-bold ${
+                         user.role === 'admin' ? 'bg-[#D4AF37]' : 'bg-[#D4AF37]'
                        }`}>
-                         {getInitials(user)}
-                       </div>
-                     )}
-                     {user.is_online && (
-                       <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
-                     )}
-                   </div>
+                        {getInitials(user)}
+                      </div>
+                    )}
+                    {user.is_online && (
+                       <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-[#D4AF37] rounded-full border-2 border-[#0D0D0D]"></span>
+                    )}
+                  </div>
                    <div 
-                     className="ml-3 flex-1 min-w-0 cursor-pointer"
+                     className="ml-4 flex-1 min-w-0 cursor-pointer"
                      onClick={() => openDirectChat(user._id)}
                    >
-                     <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between">
                        <div className="flex items-center space-x-2">
-                         <p className="text-sm font-medium text-gray-900 truncate">
-                           {getDisplayName(user)}
-                         </p>
+                         <p className="text-base font-semibold text-[#EAEAEA] truncate">
+                        {getDisplayName(user)}
+                      </p>
                          {user.role === 'admin' && (
-                           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">
+                           <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#D4AF37] text-[#0D0D0D]">
                              Admin
                            </span>
                          )}
                        </div>
                        <div className="flex items-center space-x-2">
-                         <p className="text-xs text-gray-500">
-                           {(() => {
-                             if (userChat) {
-                               const chatMessages = messages.filter(m => m.chat_id === userChat.id);
-                               if (chatMessages.length > 0) {
-                                 const lastMessage = chatMessages[chatMessages.length - 1];
-                          if (lastMessage && lastMessage.timestamp) {
+                         <p className="text-xs text-[#C0C0C0] font-medium">
+                          {(() => {
+                            if (userChat) {
+                              const chatMessages = messages.filter(m => m.chat_id === userChat.id);
+                              if (chatMessages.length > 0) {
+                                const lastMessage = chatMessages[chatMessages.length - 1];
+                                if (lastMessage && lastMessage.timestamp) {
                             return formatTimestamp(lastMessage.timestamp);
                           }
                                }
                              }
                              
-                           })()}
-                         </p>
+                          })()}
+                        </p>
                          {userChat && (
                            <button
                              onClick={(e) => {
@@ -1205,41 +1216,41 @@ export default function ChatPage() {
                            </button>
                          )}
                        </div>
-                     </div>
-                     <div className="flex items-center justify-between mt-1">
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
                        <p className="text-xs text-gray-500 truncate">
-                         {user.is_typing ? (
+                        {user.is_typing ? (
                            <span className="text-blue-600 italic">typing...</span>
-                         ) : (
-                           <span className="text-gray-500">
+                        ) : (
+                          <span className="text-gray-500">
                              {userChat ? (lastMessages[userChat.id] || "Hey there! I am using ChatApp.") : "Start chatting"}
-                           </span>
-                         )}
-                       </p>
+                          </span>
+                        )}
+                      </p>
                        {!user.is_typing && user.is_online && (
-                         <div className="flex items-center">
-                           <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                         </div>
-                       )}
-                     </div>
-                   </div>
-                 </div>
-               );
+                        <div className="flex items-center">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
              });
            })()}
         </div>
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col bg-gray-50 h-screen w-full lg:relative relative">
+      <div className="flex-1 flex flex-col bg-[#0D0D0D] h-screen w-full lg:relative relative">
           {activeChat ? (
           <>
             {/* Chat Header */}
-            <div className="bg-white px-4 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+            <div className="bg-[#121212] px-6 py-4 border-b border-[#D4AF37] flex items-center justify-between flex-shrink-0">
               <div className="flex items-center space-x-3">
                 {/* Mobile Back Button */}
                 <button 
-                  className="lg:hidden text-gray-600 hover:text-gray-800 p-1"
+                  className="lg:hidden text-[#C0C0C0] hover:text-[#D4AF37] p-2 rounded-lg hover:bg-[#1A1A1A] transition-all duration-200"
                   onClick={() => {
                     // Hide chat and show sidebar on mobile
                     const sidebar = document.querySelector('.sidebar');
@@ -1260,23 +1271,23 @@ export default function ChatPage() {
                   </svg>
                 </button>
                 
-                 {/* Chat Avatar */}
-                 <div className="relative">
-                   {activeChat.type === "group" ? (
-                     <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
+                {/* Chat Avatar */}
+                <div className="relative">
+                  {activeChat.type === "group" ? (
+                    <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                       </svg>
-                     </div>
-                   ) : (
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                    </div>
+                  ) : (
                      <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                       </svg>
-                     </div>
-                   )}
-                   <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
-                 </div>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                  )}
+                  <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
+                </div>
                 
                 {/* Chat Info */}
                 <div>
@@ -1369,8 +1380,8 @@ export default function ChatPage() {
                         </div>
                       )}
                       <MessageBubble
-                        message={message}
-                        isSelf={message.sender_id === myId}
+                  message={message}
+                  isSelf={message.sender_id === myId}
                         onCopy={handleMessageCopy}
                         onDelete={handleMessageDelete}
                         senderName={(() => {
@@ -1403,66 +1414,66 @@ export default function ChatPage() {
             </div>
             
              {/* Message Input */}
-             <div className="bg-white px-3 lg:px-4 py-3 border-t border-gray-200 flex-shrink-0">
-               {showFileUpload && (
-                 <div className="mb-3 p-3 bg-gray-50 rounded-md border border-gray-200">
-                   <FileUpload
-                     onFileUploaded={handleFileUpload}
-                     disabled={false}
-                   />
-                 </div>
-               )}
-               
-               <div className="flex items-center space-x-2">
-                 <button
-                   onClick={() => setShowFileUpload(!showFileUpload)}
-                   className="p-2 text-gray-500 hover:text-blue-600 rounded flex-shrink-0"
-                   title="Attach File"
-                 >
+             <div className="bg-[#121212] px-6 py-4 border-t border-[#D4AF37] flex-shrink-0">
+              {showFileUpload && (
+                 <div className="mb-4 p-4 bg-[#1A1A1A] rounded-lg border border-[#D4AF37]">
+                  <FileUpload
+                    onFileUploaded={handleFileUpload}
+                    disabled={false}
+                  />
+                </div>
+              )}
+              
+               <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => setShowFileUpload(!showFileUpload)}
+                   className="p-3 text-[#C0C0C0] hover:text-[#D4AF37] rounded-lg flex-shrink-0 hover:bg-[#1A1A1A] transition-all duration-200"
+                  title="Attach File"
+                >
                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                   </svg>
-                 </button>
-                 
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                  </svg>
+                </button>
+                
                  <div className="flex-1 relative min-w-0">
-                   <input 
-                     type="text"
-                     value={newMessage} 
-                     onChange={handleTyping}
-                     onKeyPress={handleKeyPress}
+                  <input 
+                  type="text"
+                    value={newMessage} 
+                  onChange={handleTyping}
+                  onKeyPress={handleKeyPress}
                      placeholder="Type a message..."
-                     className="w-full px-3 lg:px-4 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm lg:text-base"
-                   />
-                   <button className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                     className="w-full px-4 py-3 pr-12 border border-[#D4AF37] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/20 focus:border-[#D4AF37] text-sm lg:text-base bg-[#0D0D0D] transition-all duration-200"
+                  />
+                   <button className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#C0C0C0] hover:text-[#D4AF37] p-1 rounded-lg hover:bg-[#1A1A1A] transition-all duration-200">
                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h1m4 0h1m-6-8h8a2 2 0 012 2v8a2 2 0 01-2 2H8a2 2 0 01-2-2V8a2 2 0 012-2z" />
-                     </svg>
-                   </button>
-                 </div>
-                 
-                 <button
-                   onClick={sendMessage}
-                   disabled={!newMessage.trim()}
-                   className="p-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
-                 >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h1m4 0h1m-6-8h8a2 2 0 012 2v8a2 2 0 01-2 2H8a2 2 0 01-2-2V8a2 2 0 012-2z" />
+                    </svg>
+                  </button>
+                </div>
+                
+                    <button
+                  onClick={sendMessage}
+                  disabled={!newMessage.trim()}
+                   className="p-3 bg-[#D4AF37] text-[#0D0D0D] rounded-lg hover:bg-[#FFD700] disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 transition-all duration-200"
+                >
                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                   </svg>
-                 </button>
-               </div>
-         </div>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
+                </button>
+              </div>
+        </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center bg-gray-50">
-            <div className="text-center max-w-md mx-auto p-8">
-              <div className="w-24 h-24 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                <svg className="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 24 24">
+          <div className="flex-1 flex items-center justify-center bg-[#0D0D0D]">
+            <div className="text-center max-w-lg mx-auto p-12">
+              <div className="w-32 h-32 bg-[#D4AF37] rounded-2xl flex items-center justify-center mx-auto mb-8 border border-[#D4AF37]">
+                <svg className="w-16 h-16 text-[#0D0D0D]" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
                 </svg>
               </div>
-              <h2 className="text-2xl font-semibold text-gray-800 mb-3">Welcome to ChatApp</h2>
-              <p className="text-gray-600 mb-4">Connect with your team members</p>
-              <p className="text-gray-500 text-sm">Select a team member from the sidebar to start chatting</p>
+              <h2 className="text-3xl font-bold text-[#EAEAEA] mb-4">Welcome to ChatApp</h2>
+              <p className="text-[#C0C0C0] text-lg mb-6 font-medium">Connect with your team members</p>
+              <p className="text-[#C0C0C0] text-base">Select a team member from the sidebar to start chatting</p>
             </div>
         </div>
         )}
