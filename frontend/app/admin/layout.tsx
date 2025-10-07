@@ -14,17 +14,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     window.location.href = "/login";
   };
   return (
-    <div className="h-screen grid grid-cols-12 bg-[#0D0D0D]">
-      <aside className="col-span-3 border-r border-[#D4AF37] p-4 space-y-3 bg-[#121212]">
-        <h2 className="text-xl font-bold text-[#EAEAEA]">Admin</h2>
+    <div className="h-screen grid grid-cols-12 bg-[var(--background)]">
+      <aside className="col-span-3 border-r border-[var(--border)] p-4 space-y-3 bg-[var(--secondary)] shadow-lg">
+        <h2 className="text-xl font-bold text-[var(--text-primary)]">Admin</h2>
         <nav className="flex flex-col gap-2">
-          <a className="text-[#D4AF37] hover:text-[#FFD700] transition-colors" href="/admin/org">Organization</a>
-          <a className="text-[#D4AF37] hover:text-[#FFD700] transition-colors" href="/admin/profile">Profile</a>
-          <a className="text-[#D4AF37] hover:text-[#FFD700] transition-colors" href="/admin/chat">Chat</a>
+          <a className="text-[var(--accent)] hover:text-[var(--accent-hover)] transition-colors px-3 py-2 rounded-lg hover:bg-[var(--secondary-hover)]" href="/admin/org">Organization</a>
+          <a className="text-[var(--accent)] hover:text-[var(--accent-hover)] transition-colors px-3 py-2 rounded-lg hover:bg-[var(--secondary-hover)]" href="/admin/profile">Profile</a>
+          <a className="text-[var(--accent)] hover:text-[var(--accent-hover)] transition-colors px-3 py-2 rounded-lg hover:bg-[var(--secondary-hover)]" href="/admin/chat">Chat</a>
         </nav>
-        <button className="mt-4 px-4 py-2 bg-gradient-to-r from-[#D4AF37] to-[#FFD700] text-[#0D0D0D] rounded hover:from-[#FFD700] hover:to-[#FFA500] transition-all duration-200 shadow-lg" onClick={logout}>Logout</button>
+        <button className="mt-4 px-4 py-2 bg-[var(--accent)] text-[var(--text-inverse)] rounded-lg hover:bg-[var(--accent-hover)] transition-all duration-200 shadow-sm" onClick={logout}>Logout</button>
       </aside>
-      <main className="col-span-9 bg-[#0D0D0D]">{children}</main>
+      <main className="col-span-9 bg-[var(--background)]">{children}</main>
     </div>
   );
 }

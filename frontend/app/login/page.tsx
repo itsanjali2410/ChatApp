@@ -34,32 +34,25 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo/Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-[#D4AF37] to-[#FFD700] rounded-full mb-4 shadow-lg">
-            <span className="text-2xl text-[#0D0D0D]">💬</span>
-          </div>
-          <h1 className="text-3xl font-bold text-[#EAEAEA] mb-2">Welcome back</h1>
-          <p className="text-[#C0C0C0]">Sign in to your ChatApp account</p>
-        </div>
 
         {/* Login Form */}
-        <div className="bg-[#121212] rounded-xl border border-[#D4AF37] p-8">
+        <div className="bg-[var(--secondary)] rounded-xl border border-[var(--border)] p-8 shadow-lg">
           {error && (
-            <div className="mb-4 p-3 bg-red-900/20 border border-red-500 rounded-lg text-sm text-red-400">
+            <div className="mb-4 p-3 bg-[var(--error-light)] border border-[var(--error)] rounded-lg text-sm text-[var(--error)]">
               {error}
             </div>
           )}
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-[#EAEAEA] mb-1">
-                Email Address
+              <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">
+        
               </label>
               <input
-                className="w-full px-4 py-3 border border-[#D4AF37] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/20 focus:border-[#D4AF37] transition-colors bg-[#0D0D0D] text-[#EAEAEA] placeholder-[#C0C0C0]"
+                className="w-full px-4 py-3 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] transition-colors bg-[var(--secondary)] text-[var(--text-primary)] placeholder-[var(--text-muted)]"
                 type="email"
                 placeholder="Enter your email"
                 value={email}
@@ -68,11 +61,11 @@ const LoginPage = () => {
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-[#EAEAEA] mb-1">
-                Password
+              <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">
+
               </label>
               <input
-                className="w-full px-4 py-3 border border-[#D4AF37] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/20 focus:border-[#D4AF37] transition-colors bg-[#0D0D0D] text-[#EAEAEA] placeholder-[#C0C0C0]"
+                className="w-full px-4 py-3 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] transition-colors bg-[var(--secondary)] text-[var(--text-primary)] placeholder-[var(--text-muted)]"
                 type="password"
                 placeholder="Enter your password"
                 value={password}
@@ -82,13 +75,13 @@ const LoginPage = () => {
           </div>
 
           <button
-            className="w-full mt-6 bg-gradient-to-r from-[#D4AF37] to-[#FFD700] text-[#0D0D0D] py-3 rounded-lg font-medium hover:from-[#FFD700] hover:to-[#FFA500] disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl"
+            className="w-full mt-6 bg-[var(--accent)] text-[var(--text-inverse)] py-3 rounded-lg font-medium hover:bg-[var(--accent-hover)] disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl"
             onClick={handleLogin}
             disabled={loading}
           >
             {loading ? (
               <div className="flex items-center justify-center">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#0D0D0D] mr-2"></div>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[var(--text-inverse)] mr-2"></div>
                 Signing in...
               </div>
             ) : (
@@ -97,10 +90,10 @@ const LoginPage = () => {
           </button>
 
           <div className="mt-6 text-center">
-            <p className="text-[#C0C0C0]">
+            <p className="text-[var(--text-secondary)]">
               New here?{" "}
               <a 
-                className="text-[#D4AF37] hover:text-[#FFD700] font-medium transition-colors" 
+                className="text-[var(--accent)] hover:text-[var(--accent-hover)] font-medium transition-colors" 
                 href="/signup"
               >
                 Create an account
@@ -110,7 +103,7 @@ const LoginPage = () => {
         </div>
 
         {/* Footer */}
-        <div className="text-center mt-8 text-sm text-[#C0C0C0]">
+        <div className="text-center mt-8 text-sm text-[var(--text-muted)]">
           <p>© 2024 ChatApp. All rights reserved.</p>
         </div>
       </div>

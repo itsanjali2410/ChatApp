@@ -117,26 +117,26 @@ export default function ProfileManager({ onProfileUpdate }: ProfileManagerProps)
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#D4AF37]"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--accent)]"></div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6 bg-[#121212] border border-[#D4AF37] rounded-lg">
+    <div className="max-w-4xl mx-auto p-6 bg-[var(--secondary)] border border-[var(--border)] rounded-lg shadow-lg">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-[#EAEAEA] mb-2">Profile Management</h2>
-        <p className="text-[#C0C0C0]">Manage your profile information and photos</p>
+        <h2 className="text-2xl font-bold text-[var(--text-primary)] mb-2">Profile Management</h2>
+        <p className="text-[var(--text-secondary)]">Manage your profile information and photos</p>
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex space-x-1 mb-6 bg-[#1A1A1A] p-1 rounded-lg border border-[#D4AF37]">
+      <div className="flex space-x-1 mb-6 bg-[var(--secondary-hover)] p-1 rounded-lg border border-[var(--border)]">
         <button
           onClick={() => setActiveTab('profile')}
           className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
             activeTab === 'profile'
-              ? 'bg-gradient-to-r from-[#D4AF37] to-[#FFD700] text-[#0D0D0D] shadow-sm'
-              : 'text-[#C0C0C0] hover:text-[#D4AF37]'
+              ? 'bg-[var(--accent)] text-[var(--text-inverse)] shadow-sm'
+              : 'text-[var(--text-secondary)] hover:text-[var(--accent)]'
           }`}
         >
           Profile Details
@@ -145,8 +145,8 @@ export default function ProfileManager({ onProfileUpdate }: ProfileManagerProps)
           onClick={() => setActiveTab('pictures')}
           className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
             activeTab === 'pictures'
-              ? 'bg-gradient-to-r from-[#D4AF37] to-[#FFD700] text-[#0D0D0D] shadow-sm'
-              : 'text-[#C0C0C0] hover:text-[#D4AF37]'
+              ? 'bg-[var(--accent)] text-[var(--text-inverse)] shadow-sm'
+              : 'text-[var(--text-secondary)] hover:text-[var(--accent)]'
           }`}
         >
           Photos

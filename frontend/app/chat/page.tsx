@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 import React, { useEffect, useState, useRef } from "react";
-import api, { getFileUrl } from "../../utils/api";
+import api, { getFileUrl, markMessagesAsRead, markMessagesAsDelivered } from "../../utils/api";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { notificationService } from "../../utils/notificationService";
 import FileUpload from "../../components/FileUpload";
@@ -58,6 +58,9 @@ type Message = {
   message_type: string;
   attachment?: FileAttachment;
   timestamp: string; 
+  status?: 'sent' | 'delivered' | 'read';
+  seen_at?: string;
+  seen_by?: string;
 };
 
 export default function ChatPage() {
@@ -75,12 +78,28 @@ export default function ChatPage() {
   const [showOnlineUsers, setShowOnlineUsers] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [lastMessages, setLastMessages] = useState<{[chatId: string]: string}>({});
+  const [unreadCounts, setUnreadCounts] = useState<{[chatId: string]: number}>({});
+  const [lastReadTimestamps, setLastReadTimestamps] = useState<{[chatId: string]: string}>({});
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
   const [showPopupNotification, setShowPopupNotification] = useState(false);
   const [popupMessage, setPopupMessage] = useState<{sender: string, message: string} | null>(null);
   const [showGroupCreation, setShowGroupCreation] = useState(false);
   const [showGroupManagement, setShowGroupManagement] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showSidebar, setShowSidebar] = useState(false);
+
+  // On mobile, show sidebar (users list) by default; hide it on desktop
+  useEffect(() => {
+    const updateSidebarForViewport = () => {
+      if (typeof window === 'undefined') return;
+      const isMobile = window.innerWidth < 1024; // lg breakpoint
+      setShowSidebar(isMobile ? true : false);
+    };
+
+    updateSidebarForViewport();
+    window.addEventListener('resize', updateSidebarForViewport);
+    return () => window.removeEventListener('resize', updateSidebarForViewport);
+  }, []);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const myId = typeof window !== "undefined" ? localStorage.getItem("user_id") || "" : "";
   const orgId = typeof window !== "undefined" ? localStorage.getItem("org_id") || "" : "";
@@ -96,7 +115,7 @@ export default function ChatPage() {
   // WebSocket connection
   const { isConnected, sendMessage: sendWSMessage } = useWebSocket({
     url: `/ws/${myId}`,
-    onMessage: (event) => {
+    onMessage: async (event) => {
       const data = JSON.parse(event.data);
       console.log("WebSocket message received:", data);
       
@@ -108,7 +127,10 @@ export default function ChatPage() {
           message: data.message,
           timestamp: data.timestamp || new Date().toISOString(),
           message_type: data.message_type || "text",
-          attachment: data.attachment
+          attachment: data.attachment,
+          status: data.status || "sent",
+          seen_at: data.seen_at,
+          seen_by: data.seen_by
         };
         setMessages(prev => {
           // Check if message already exists to avoid duplicates
@@ -130,10 +152,57 @@ export default function ChatPage() {
           [data.chat_id]: data.message
         }));
 
+        // Update unread count if message is not from current user and chat is not active
+        if (data.sender_id !== myId && activeChat?.id !== data.chat_id) {
+          setUnreadCounts(prev => ({
+            ...prev,
+            [data.chat_id]: (prev[data.chat_id] || 0) + 1
+          }));
+        }
+
+        // Update users list to move sender to top (real-time sorting)
+        if (data.sender_id !== myId) {
+          setUsers(prev => {
+            const senderIndex = prev.findIndex(u => u._id === data.sender_id);
+            if (senderIndex > 0) {
+              const sender = prev[senderIndex];
+              const updatedUsers = [...prev];
+              updatedUsers.splice(senderIndex, 1);
+              updatedUsers.unshift(sender);
+              return updatedUsers;
+            }
+            return prev;
+          });
+        }
+
+        // Also update chats list to move the chat to top
+        setChats(prev => {
+          const chatIndex = prev.findIndex(c => c.id === data.chat_id);
+          if (chatIndex > 0) {
+            const chat = prev[chatIndex];
+            const updatedChats = [...prev];
+            updatedChats.splice(chatIndex, 1);
+            updatedChats.unshift(chat);
+            return updatedChats;
+          }
+          return prev;
+        });
+
         // Show notification if message is not from current user
         if (data.sender_id !== myId) {
           const sender = users.find(u => u._id === data.sender_id);
           const senderName = sender ? getDisplayName(sender) : 'Unknown User';
+          
+          // Mark messages as delivered when received
+          try {
+            await markMessagesAsDelivered(data.chat_id);
+            sendWSMessage({
+              type: "mark_delivered",
+              chat_id: data.chat_id
+            });
+          } catch (error) {
+            console.error("Error marking messages as delivered:", error);
+          }
           
           // Play notification sound
           notificationService.playNotificationSound();
@@ -163,8 +232,34 @@ export default function ChatPage() {
         }
       } else if (data.type === "typing") {
         setOtherUserTyping(data.is_typing);
+      } else if (data.type === "messages_delivered") {
+        // Handle messages marked as delivered
+        console.log("Messages delivered:", data);
+        if (data.chat_id === activeChat?.id) {
+          setMessages(prev => prev.map(msg => 
+            msg.chat_id === data.chat_id && msg.sender_id !== myId && msg.status === "sent"
+              ? { ...msg, status: "delivered" }
+              : msg
+          ));
+        }
+      } else if (data.type === "messages_read") {
+        // Handle messages marked as read
+        console.log("Messages read:", data);
+        if (data.chat_id === activeChat?.id) {
+          setMessages(prev => prev.map(msg => 
+            msg.chat_id === data.chat_id && msg.sender_id !== myId && (msg.status === "sent" || msg.status === "delivered")
+              ? { ...msg, status: "read", seen_at: data.seen_at, seen_by: data.user_id }
+              : msg
+          ));
+        }
       } else if (data.type === "message_status") {
+        // Handle individual message status update
         console.log("Message status update:", data);
+        setMessages(prev => prev.map(msg => 
+          msg.id === data.message_id
+            ? { ...msg, status: data.status }
+            : msg
+        ));
       }
     },
     onOpen: () => {
@@ -280,8 +375,18 @@ export default function ChatPage() {
   }, []);
 
   // Auto-scroll to bottom when messages change (only if user is near bottom)
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToBottom = (force = false) => {
+    if (force || isNearBottom()) {
+      // Use different timing for mobile vs desktop
+      const delay = window.innerWidth < 768 ? 150 : 100;
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ 
+          behavior: "smooth",
+          block: "end",
+          inline: "nearest"
+        });
+      }, delay);
+    }
   };
 
   const isNearBottom = () => {
@@ -289,15 +394,14 @@ export default function ChatPage() {
     if (!messagesContainer) return true;
     
     const { scrollTop, scrollHeight, clientHeight } = messagesContainer;
-    return scrollHeight - scrollTop - clientHeight < 100; // Within 100px of bottom
+    const threshold = window.innerWidth < 768 ? 200 : 150; // Larger threshold on mobile
+    return scrollHeight - scrollTop - clientHeight < threshold;
   };
 
   useEffect(() => {
     // Only auto-scroll if user is near the bottom (hasn't scrolled up to read old messages)
-    if (isNearBottom()) {
     scrollToBottom();
-    }
-  }, [messages]);
+  }, [messages.length]); // Only trigger when message count changes, not content
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -350,7 +454,7 @@ export default function ChatPage() {
     if (activeChat && messages.length > 0) {
       // Small delay to ensure messages are rendered
       setTimeout(() => {
-        scrollToBottom();
+        scrollToBottom(true); // Force scroll when opening chat
       }, 100);
     }
   }, [activeChat]);
@@ -368,6 +472,36 @@ export default function ChatPage() {
       return `${user.first_name[0]}${user.last_name[0]}`.toUpperCase();
     }
     return (user.username || user.email).substring(0, 2).toUpperCase();
+  };
+
+  const formatLastSeen = (user: User | undefined) => {
+    if (!user) return "last seen recently";
+    
+    if (user.is_online) {
+      return "online";
+    }
+    
+    if (!(user as any).last_seen) {
+      return "last seen recently";
+    }
+    
+    try {
+      const lastSeenDate = new Date((user as any).last_seen);
+      const now = new Date();
+      const diffMs = now.getTime() - lastSeenDate.getTime();
+      const diffMins = Math.floor(diffMs / (1000 * 60));
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      
+      if (diffMins < 1) return "last seen just now";
+      if (diffMins < 60) return `last seen ${diffMins}m ago`;
+      if (diffHours < 24) return `last seen ${diffHours}h ago`;
+      if (diffDays < 7) return `last seen ${diffDays}d ago`;
+      
+      return `last seen ${lastSeenDate.toLocaleDateString()}`;
+    } catch (error) {
+      return "last seen recently";
+    }
   };
 
   // Filter users (sorting will be handled by backend)
@@ -388,6 +522,30 @@ export default function ChatPage() {
            userEmail.includes(searchLower) || 
            userRole.includes(searchLower);
   });
+
+  // Mark messages as read when chat is opened
+  const markChatAsRead = async (chatId: string) => {
+    setUnreadCounts(prev => ({
+      ...prev,
+      [chatId]: 0
+    }));
+    setLastReadTimestamps(prev => ({
+      ...prev,
+      [chatId]: new Date().toISOString()
+    }));
+    
+    // Mark messages as read via API
+    try {
+      await markMessagesAsRead(chatId);
+      // Also send via WebSocket for real-time updates
+      sendWSMessage({
+        type: "mark_read",
+        chat_id: chatId
+      });
+    } catch (error) {
+      console.error("Error marking messages as read:", error);
+    }
+  };
 
   const openDirectChat = async (otherUserId: string) => {
     console.log("Opening chat with:", otherUserId);
@@ -427,6 +585,12 @@ export default function ChatPage() {
       setActiveChat(newChat);
       console.log("Set active chat to:", newChat);
       
+      // Mark chat as read
+      markChatAsRead(newChat.id);
+      
+      // Hide sidebar on mobile when chat is opened
+      setShowSidebar(false);
+      
       // Join the chat via WebSocket
       if (isConnected) {
         console.log("Joining chat via WebSocket...");
@@ -456,6 +620,12 @@ export default function ChatPage() {
   const openGroupChat = async (chat: Chat) => {
     console.log("Opening group chat:", chat);
     setActiveChat(chat);
+    
+    // Mark chat as read
+    markChatAsRead(chat.id);
+    
+    // Hide sidebar on mobile when chat is opened
+    setShowSidebar(false);
     
     // Join the chat via WebSocket
     if (isConnected) {
@@ -895,29 +1065,43 @@ export default function ChatPage() {
           }
         }
       `}</style>
-      <div className="min-h-screen bg-[#0D0D0D] flex flex-col lg:flex-row">
+      <div className="h-screen bg-[var(--background)] flex flex-col lg:flex-row overflow-hidden relative">
+      {/* Mobile Header - Only visible on mobile when sidebar is closed */}
+      <div className={`lg:hidden bg-[var(--secondary)] border-b border-[var(--border)] px-4 py-3 flex items-center justify-between shadow-sm transition-opacity duration-300 ${showSidebar ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+        <button
+          onClick={() => setShowSidebar(!showSidebar)}
+          className="text-[var(--text-secondary)] hover:text-[var(--accent)] p-2 rounded-lg hover:bg-[var(--secondary-hover)] transition-all duration-200"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <h1 className="text-lg font-semibold text-[var(--text-primary)]">ChatApp</h1>
+        <div className="w-10"></div> {/* Spacer for centering */}
+      </div>
+
       {/* Popup Notification */}
       {showPopupNotification && popupMessage && (
-        <div className="fixed top-6 right-6 z-50 bg-[#121212] rounded-lg shadow-2xl border border-[#D4AF37] p-6 max-w-sm animate-in slide-in-from-right-5 duration-300">
+        <div className="fixed top-6 right-6 z-50 bg-[var(--secondary)] rounded-xl shadow-lg border border-[var(--border)] p-6 max-w-sm animate-in slide-in-from-right-5 duration-300">
           <div className="flex items-start space-x-4">
             <div className="flex-shrink-0">
-              <div className="w-10 h-10 bg-[#D4AF37] rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-[#0D0D0D]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-10 h-10 bg-[var(--accent)] rounded-lg flex items-center justify-center">
+                <svg className="w-5 h-5 text-[var(--text-inverse)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
               </div>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-[#EAEAEA] mb-1">
+              <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">
                 {popupMessage.sender}
               </p>
-              <p className="text-sm text-[#C0C0C0] leading-relaxed">
+              <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
                 {popupMessage.message}
               </p>
             </div>
             <button
               onClick={() => setShowPopupNotification(false)}
-              className="flex-shrink-0 text-[#C0C0C0] hover:text-[#D4AF37] transition-colors duration-200 p-1 rounded-lg hover:bg-[#1A1A1A]"
+              className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors duration-200 p-1 rounded-lg hover:bg-[var(--secondary-hover)]"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -926,23 +1110,22 @@ export default function ChatPage() {
           </div>
         </div>
       )}
+      {/* Mobile Overlay - Hidden on mobile when sidebar is open, only for desktop */}
+      <div 
+        className={`fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden transition-opacity duration-300 ${showSidebar ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+        onClick={() => setShowSidebar(false)}
+      />
+
       {/* Sidebar */}
-      <div className="sidebar w-full lg:w-80 bg-[#121212] border-r border-[#D4AF37] flex flex-col h-screen lg:relative absolute z-40 lg:z-auto">
+      <div className={`${showSidebar ? 'sidebar show translate-x-0' : 'sidebar hidden -translate-x-full'} lg:translate-x-0 fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto w-full lg:w-80 bg-[var(--chat-sidebar)] border-r border-[var(--border)] flex flex-col transition-transform duration-300 ease-in-out shadow-lg`}>
         {/* Header */}
-        <div className="bg-[#0D0D0D] px-6 py-4 flex-shrink-0 border-b border-[#D4AF37]">
+        <div className="bg-[var(--secondary)] px-6 py-4 flex-shrink-0 border-b border-[var(--border)]">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               {/* Mobile menu button */}
               <button 
-                className="lg:hidden text-[#C0C0C0] hover:text-[#D4AF37] hover:bg-[#1A1A1A] p-2 rounded-lg transition-all duration-200"
-                onClick={() => {
-                  // Toggle sidebar visibility on mobile
-                  const sidebar = document.querySelector('.sidebar');
-                  if (sidebar) {
-                    sidebar.classList.toggle('show');
-                    sidebar.classList.toggle('hidden');
-                  }
-                }}
+                className="lg:hidden text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--secondary-hover)] p-2 rounded-lg transition-all duration-200"
+                onClick={() => setShowSidebar(false)}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -954,26 +1137,26 @@ export default function ChatPage() {
                 <img
                       src={getFileUrl(currentUser.profile_picture)}
                   alt="Profile"
-                      className="w-12 h-12 rounded-lg object-cover border-2 border-[#D4AF37]"
+                      className="w-12 h-12 rounded-lg object-cover border-2 border-[var(--accent)]"
                 />
               ) : (
-                    <div className="w-12 h-12 rounded-lg bg-[#D4AF37] flex items-center justify-center text-[#0D0D0D] font-semibold border-2 border-[#D4AF37]">
+                    <div className="w-12 h-12 rounded-lg bg-[var(--accent)] flex items-center justify-center text-[var(--text-inverse)] font-semibold border-2 border-[var(--accent)]">
                   {getInitials(currentUser)}
                 </div>
               )}
-                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[#D4AF37] rounded-full border-2 border-[#0D0D0D]"></div>
+                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[var(--success)] rounded-full border-2 border-[var(--secondary)]"></div>
                 </div>
               )}
               <div className="ml-2">
-                <h1 className="text-xl font-bold text-[#EAEAEA] tracking-tight">ChatApp</h1>
-                <p className="text-[#C0C0C0] text-sm font-medium">
+                <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">ChatApp</h1>
+                <p className="text-[var(--text-secondary)] text-sm font-medium">
                   {currentUser?.first_name ? `Hi, ${currentUser.first_name}` : 'Team Chat'}
                 </p>
             </div>
             </div>
               <button 
                 onClick={() => setShowProfile(true)}
-              className="p-2.5 text-[#C0C0C0] hover:text-[#D4AF37] hover:bg-[#1A1A1A] rounded-lg transition-all duration-200"
+              className="p-2.5 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--secondary-hover)] rounded-lg transition-all duration-200"
               title="Settings"
               >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -985,10 +1168,10 @@ export default function ChatPage() {
         </div>
 
         {/* Search Bar */}
-        <div className="px-6 py-4 bg-[#0D0D0D] border-b border-[#D4AF37] flex-shrink-0">
+        <div className="px-6 py-4 bg-[var(--secondary)] border-b border-[var(--border)] flex-shrink-0">
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <svg className="h-5 w-5 text-[#C0C0C0]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="h-5 w-5 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </div>
@@ -997,12 +1180,12 @@ export default function ChatPage() {
               placeholder="Search users and groups..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="block w-full pl-12 pr-12 py-3.5 border border-[#D4AF37] rounded-lg text-sm placeholder-[#C0C0C0] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/20 focus:border-[#D4AF37] bg-[#121212] transition-all duration-200"
+              className="block w-full pl-12 pr-12 py-3.5 border border-[var(--border)] rounded-lg text-sm placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] bg-[var(--secondary)] transition-all duration-200"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
-                className="absolute inset-y-0 right-0 pr-4 flex items-center text-[#C0C0C0] hover:text-[#D4AF37] transition-colors duration-200 p-1 rounded-lg hover:bg-[#1A1A1A]"
+                className="absolute inset-y-0 right-0 pr-4 flex items-center text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors duration-200 p-1 rounded-lg hover:bg-[var(--secondary-hover)]"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1014,10 +1197,10 @@ export default function ChatPage() {
 
         {/* Create Group Button */}
         {canCreateGroup && (
-          <div className="px-6 py-3 border-b border-[#D4AF37]">
+          <div className="px-6 py-3 border-b border-[var(--border)]">
             <button
               onClick={() => setShowGroupCreation(true)}
-              className="w-full px-4 py-3 bg-[#D4AF37] text-[#0D0D0D] rounded-lg hover:bg-[#FFD700] flex items-center justify-center text-sm font-semibold transition-all duration-200"
+              className="w-full px-4 py-3 bg-[var(--accent)] text-[var(--text-inverse)] rounded-lg hover:bg-[var(--accent-hover)] flex items-center justify-center text-sm font-semibold transition-all duration-200 shadow-sm"
             >
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -1028,7 +1211,7 @@ export default function ChatPage() {
         )}
 
         {/* Chat List - Scrollable */}
-        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gold scrollbar-track-black">
+        <div className="flex-1 overflow-y-auto scrollbar-thin">
           {/* Group Chats */}
           {(() => {
             const filteredGroupChats = chats.filter(chat => {
@@ -1045,17 +1228,31 @@ export default function ChatPage() {
               return groupName.includes(searchLower) || 
                      groupDescription.includes(searchLower);
             });
+
+            // Sort group chats by last message timestamp
+            const sortedGroupChats = filteredGroupChats.sort((a, b) => {
+              const aLastMessage = lastMessages[a.id];
+              const bLastMessage = lastMessages[b.id];
+              
+              if (!aLastMessage && !bLastMessage) return 0;
+              if (!aLastMessage) return 1;
+              if (!bLastMessage) return -1;
+              
+              // For now, we'll sort by chat creation time as a fallback
+              // In a real implementation, you'd want to track actual last message timestamps
+              return new Date((b as any).created_at || 0).getTime() - new Date((a as any).created_at || 0).getTime();
+            });
             
-            return filteredGroupChats.map(chat => (
+            return sortedGroupChats.map(chat => (
               <div
                 key={chat.id}
                 onClick={() => openGroupChat(chat)}
-                className={`flex items-center px-6 py-4 hover:bg-[#1A1A1A] cursor-pointer border-b border-[#D4AF37]/20 transition-all duration-200 group ${
-                  activeChat?.id === chat.id ? 'bg-[#1A1A1A] border-l-4 border-l-[#D4AF37]' : ''
+                className={`flex items-center px-6 py-4 hover:bg-[var(--secondary-hover)] cursor-pointer border-b border-[var(--border)] transition-all duration-200 group ${
+                  activeChat?.id === chat.id ? 'bg-[var(--accent-light)] border-l-4 border-l-[var(--accent)]' : ''
                 }`}
               >
                 <div className="relative flex-shrink-0">
-                  <div className="w-14 h-14 rounded-lg bg-[#D4AF37] flex items-center justify-center text-[#0D0D0D] font-bold">
+                  <div className="w-14 h-14 rounded-lg bg-[var(--accent)] flex items-center justify-center text-[var(--text-inverse)] font-bold">
                     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
@@ -1063,10 +1260,10 @@ export default function ChatPage() {
                 </div>
                 <div className="ml-4 flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <p className="text-base font-semibold text-[#EAEAEA] truncate">
+                    <p className="text-base font-semibold text-[var(--text-primary)] truncate">
                       {chat.group_name}
                     </p>
-                    <p className="text-xs text-[#C0C0C0] font-medium">
+                    <p className="text-xs text-[var(--text-secondary)] font-medium">
                       {(() => {
                         // Find the most recent message for this chat
                         const chatMessages = messages.filter(m => m.chat_id === chat.id);
@@ -1085,14 +1282,19 @@ export default function ChatPage() {
                     </p>
                   </div>
                   <div className="flex items-center justify-between mt-2">
-                    <p className="text-sm text-[#C0C0C0] truncate font-medium">
+                    <p className="text-sm text-[var(--text-secondary)] truncate font-medium">
                       {lastMessages[chat.id] || `${chat.participants.length} members`}
                     </p>
-                    <div className="flex items-center">
-                      <div className="w-2.5 h-2.5 bg-[#D4AF37] rounded-full"></div>
+                    <div className="flex items-center space-x-2">
+                      {unreadCounts[chat.id] > 0 && (
+                        <div className="bg-[var(--accent)] text-[var(--text-inverse)] text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-2">
+                          {unreadCounts[chat.id] > 99 ? '99+' : unreadCounts[chat.id]}
                     </div>
+                      )}
+                      <div className="w-2.5 h-2.5 bg-[var(--success)] rounded-full"></div>
                   </div>
                 </div>
+              </div>
               </div>
             ));
           })()}
@@ -1115,20 +1317,20 @@ export default function ChatPage() {
              if (searchQuery.trim() && !hasGroupResults && !hasUserResults) {
                return (
                  <div className="flex flex-col items-center justify-center py-12 px-6">
-                   <div className="w-16 h-16 bg-[#1A1A1A] rounded-lg flex items-center justify-center mb-4 border border-[#D4AF37]">
-                     <svg className="w-8 h-8 text-[#C0C0C0]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <div className="w-16 h-16 bg-[var(--secondary-hover)] rounded-lg flex items-center justify-center mb-4 border border-[var(--border)]">
+                     <svg className="w-8 h-8 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                      </svg>
                    </div>
-                   <p className="text-[#EAEAEA] text-base font-medium text-center mb-2">
+                   <p className="text-[var(--text-primary)] text-base font-medium text-center mb-2">
                      No users or groups found
                    </p>
-                   <p className="text-[#C0C0C0] text-sm text-center mb-4">
+                   <p className="text-[var(--text-secondary)] text-sm text-center mb-4">
                      Try searching with different keywords
                    </p>
                    <button
                      onClick={() => setSearchQuery("")}
-                     className="px-4 py-2 bg-[#D4AF37] text-[#0D0D0D] text-sm font-medium rounded-lg hover:bg-[#FFD700] transition-colors duration-200"
+                     className="px-4 py-2 bg-[var(--accent)] text-[var(--text-inverse)] text-sm font-medium rounded-lg hover:bg-[var(--accent-hover)] transition-colors duration-200"
                    >
                      Clear search
                    </button>
@@ -1136,7 +1338,33 @@ export default function ChatPage() {
                );
              }
              
-             return filteredUsers.map(user => {
+             // Sort users by last message timestamp
+             const sortedUsers = filteredUsers.sort((a, b) => {
+               const aChat = chats.find(chat => 
+                 chat.type === "direct" && 
+                 chat.participants.includes(a._id) && 
+                 chat.participants.includes(myId)
+               );
+               const bChat = chats.find(chat => 
+                 chat.type === "direct" && 
+                 chat.participants.includes(b._id) && 
+                 chat.participants.includes(myId)
+               );
+               
+               const aLastMessage = aChat ? lastMessages[aChat.id] : null;
+               const bLastMessage = bChat ? lastMessages[bChat.id] : null;
+               
+               if (!aLastMessage && !bLastMessage) return 0;
+               if (!aLastMessage) return 1;
+               if (!bLastMessage) return -1;
+               
+               // Sort by last seen time as fallback
+               const aLastSeen = new Date((a as any).last_seen || 0).getTime();
+               const bLastSeen = new Date((b as any).last_seen || 0).getTime();
+               return bLastSeen - aLastSeen;
+             });
+             
+             return sortedUsers.map(user => {
               // Find the direct chat with this user
               const userChat = chats.find(chat => 
                 chat.type === "direct" && 
@@ -1147,8 +1375,8 @@ export default function ChatPage() {
               return (
                 <div
                   key={user._id}
-                   className={`flex items-center px-6 py-4 hover:bg-[#1A1A1A] border-b border-[#D4AF37]/20 group transition-all duration-200 ${
-                     activeChat?.id === userChat?.id ? 'bg-[#1A1A1A] border-l-4 border-l-[#D4AF37]' : ''
+                   className={`flex items-center px-6 py-4 hover:bg-[var(--secondary-hover)] border-b border-[var(--border)] group transition-all duration-200 ${
+                     activeChat?.id === userChat?.id ? 'bg-[var(--accent-light)] border-l-4 border-l-[var(--accent)]' : ''
                   }`}
                 >
                   <div className="relative flex-shrink-0">
@@ -1156,17 +1384,17 @@ export default function ChatPage() {
                       <img
                         src={getFileUrl(user.profile_picture)}
                         alt={getDisplayName(user)}
-                         className="w-12 h-12 rounded-lg object-cover border border-[#D4AF37]"
+                         className="w-12 h-12 rounded-lg object-cover border border-[var(--accent)]"
                       />
                     ) : (
-                       <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-[#0D0D0D] text-sm font-bold ${
-                         user.role === 'admin' ? 'bg-[#D4AF37]' : 'bg-[#D4AF37]'
+                       <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-[var(--text-inverse)] text-sm font-bold ${
+                         user.role === 'admin' ? 'bg-[var(--accent)]' : 'bg-[var(--accent)]'
                        }`}>
                         {getInitials(user)}
                       </div>
                     )}
                     {user.is_online && (
-                       <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-[#D4AF37] rounded-full border-2 border-[#0D0D0D]"></span>
+                       <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-[var(--success)] rounded-full border-2 border-[var(--secondary)]"></span>
                     )}
                   </div>
                    <div 
@@ -1175,17 +1403,17 @@ export default function ChatPage() {
                    >
                     <div className="flex items-center justify-between">
                        <div className="flex items-center space-x-2">
-                         <p className="text-base font-semibold text-[#EAEAEA] truncate">
+                         <p className="text-base font-semibold text-[var(--text-primary)] truncate">
                         {getDisplayName(user)}
                       </p>
                          {user.role === 'admin' && (
-                           <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-[#D4AF37] text-[#0D0D0D]">
+                           <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--accent)] text-[var(--text-inverse)]">
                              Admin
                            </span>
                          )}
                        </div>
                        <div className="flex items-center space-x-2">
-                         <p className="text-xs text-[#C0C0C0] font-medium">
+                         <p className="text-xs text-[var(--text-secondary)] font-medium">
                           {(() => {
                             if (userChat) {
                               const chatMessages = messages.filter(m => m.chat_id === userChat.id);
@@ -1218,20 +1446,25 @@ export default function ChatPage() {
                        </div>
                     </div>
                     <div className="flex items-center justify-between mt-1">
-                       <p className="text-xs text-gray-500 truncate">
+                       <p className="text-xs text-[var(--text-secondary)] truncate">
                         {user.is_typing ? (
-                           <span className="text-blue-600 italic">typing...</span>
+                           <span className="text-[var(--accent)] italic">typing...</span>
                         ) : (
-                          <span className="text-gray-500">
+                          <span className="text-[var(--text-secondary)]">
                              {userChat ? (lastMessages[userChat.id] || "Hey there! I am using ChatApp.") : "Start chatting"}
                           </span>
                         )}
                       </p>
-                       {!user.is_typing && user.is_online && (
-                        <div className="flex items-center">
-                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <div className="flex items-center space-x-2">
+                        {userChat && unreadCounts[userChat.id] > 0 && (
+                          <div className="bg-[var(--accent)] text-[var(--text-inverse)] text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-2">
+                            {unreadCounts[userChat.id] > 99 ? '99+' : unreadCounts[userChat.id]}
                         </div>
                       )}
+                        {!user.is_typing && user.is_online && (
+                          <div className="w-2 h-2 bg-[var(--success)] rounded-full"></div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1242,22 +1475,17 @@ export default function ChatPage() {
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col bg-[#0D0D0D] h-screen w-full lg:relative relative">
+      <div className={`flex-1 flex flex-col bg-[var(--chat-bg)] min-h-0 h-screen w-full lg:relative relative overflow-hidden transition-opacity duration-300 ${showSidebar ? 'lg:opacity-100 opacity-0 pointer-events-none' : 'opacity-100'}`}>
           {activeChat ? (
           <>
             {/* Chat Header */}
-            <div className="bg-[#121212] px-6 py-4 border-b border-[#D4AF37] flex items-center justify-between flex-shrink-0">
+            <div className="bg-[var(--secondary)] px-6 py-4 border-b border-[var(--border)] flex items-center justify-between flex-shrink-0 shadow-sm">
               <div className="flex items-center space-x-3">
                 {/* Mobile Back Button */}
                 <button 
-                  className="lg:hidden text-[#C0C0C0] hover:text-[#D4AF37] p-2 rounded-lg hover:bg-[#1A1A1A] transition-all duration-200"
+                  className="lg:hidden text-[var(--text-muted)] hover:text-[var(--accent)] p-2 rounded-lg hover:bg-[var(--secondary-hover)] transition-all duration-200"
                   onClick={() => {
-                    // Hide chat and show sidebar on mobile
-                    const sidebar = document.querySelector('.sidebar');
-                    if (sidebar) {
-                      sidebar.classList.add('show');
-                      sidebar.classList.remove('hidden');
-                    }
+                    setShowSidebar(true);
                     setActiveChat(null);
                   }}
                 >
@@ -1291,16 +1519,16 @@ export default function ChatPage() {
                 
                 {/* Chat Info */}
                 <div>
-                  <h2 className="font-semibold text-gray-900 text-lg">
+                  <h2 className="font-semibold text-[var(--text-primary)] text-lg">
                     {activeChat.type === "group" 
                       ? activeChat.group_name 
-                      : users.find(u => activeChat.participants.includes(u._id) && u._id !== myId)?.first_name || 'Chat'
+                      : getDisplayName(users.find(u => activeChat.participants.includes(u._id) && u._id !== myId) || {} as User)
                     }
                   </h2>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-[var(--text-secondary)]">
                     {activeChat.type === "group" 
                       ? `${activeChat.participants.length} members`
-                      : "last seen recently"
+                      : formatLastSeen(users.find(u => activeChat.participants.includes(u._id) && u._id !== myId))
                     }
                   </p>
                 </div>
@@ -1358,9 +1586,9 @@ export default function ChatPage() {
             
             {/* WhatsApp Messages Area - Scrollable */}
             <div 
-              className="flex-1 overflow-y-auto bg-gray-100 p-4 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100"
+              className="flex-1 overflow-y-auto bg-[var(--chat-bg)] px-2 sm:px-4 py-4 sm:py-6 scrollbar-thin scrollbar-thumb-[var(--accent)] scrollbar-track-[var(--border)] min-h-0"
               style={{
-                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23f0f0f0' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23f0f0f0' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
                 backgroundRepeat: 'repeat'
               }}
             >
@@ -1414,9 +1642,9 @@ export default function ChatPage() {
             </div>
             
              {/* Message Input */}
-             <div className="bg-[#121212] px-6 py-4 border-t border-[#D4AF37] flex-shrink-0">
+             <div className="bg-[var(--secondary)] px-4 sm:px-6 py-4 border-t border-[var(--border)] flex-shrink-0 shadow-lg">
               {showFileUpload && (
-                 <div className="mb-4 p-4 bg-[#1A1A1A] rounded-lg border border-[#D4AF37]">
+                 <div className="mb-4 p-4 bg-[var(--secondary-hover)] rounded-lg border border-[var(--border)] shadow-sm">
                   <FileUpload
                     onFileUploaded={handleFileUpload}
                     disabled={false}
@@ -1424,10 +1652,10 @@ export default function ChatPage() {
                 </div>
               )}
               
-               <div className="flex items-center space-x-3">
+               <div className="flex items-center space-x-3 px-2">
                 <button
                   onClick={() => setShowFileUpload(!showFileUpload)}
-                   className="p-3 text-[#C0C0C0] hover:text-[#D4AF37] rounded-lg flex-shrink-0 hover:bg-[#1A1A1A] transition-all duration-200"
+                   className="p-3 text-[var(--text-muted)] hover:text-[var(--accent)] rounded-lg flex-shrink-0 hover:bg-[var(--secondary-hover)] transition-all duration-200"
                   title="Attach File"
                 >
                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1442,9 +1670,9 @@ export default function ChatPage() {
                   onChange={handleTyping}
                   onKeyPress={handleKeyPress}
                      placeholder="Type a message..."
-                     className="w-full px-4 py-3 pr-12 border border-[#D4AF37] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/20 focus:border-[#D4AF37] text-sm lg:text-base bg-[#0D0D0D] transition-all duration-200"
+                     className="w-full px-4 py-3 pr-12 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] text-sm lg:text-base bg-[var(--secondary)] text-[var(--text-primary)] placeholder-[var(--text-muted)] transition-all duration-200"
                   />
-                   <button className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[#C0C0C0] hover:text-[#D4AF37] p-1 rounded-lg hover:bg-[#1A1A1A] transition-all duration-200">
+                   <button className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--accent)] p-1 rounded-lg hover:bg-[var(--secondary-hover)] transition-all duration-200">
                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h1m4 0h1m-6-8h8a2 2 0 012 2v8a2 2 0 01-2 2H8a2 2 0 01-2-2V8a2 2 0 012-2z" />
                     </svg>
@@ -1454,7 +1682,7 @@ export default function ChatPage() {
                     <button
                   onClick={sendMessage}
                   disabled={!newMessage.trim()}
-                   className="p-3 bg-[#D4AF37] text-[#0D0D0D] rounded-lg hover:bg-[#FFD700] disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 transition-all duration-200"
+                   className="p-3 bg-[var(--accent)] text-[var(--text-inverse)] rounded-lg hover:bg-[var(--accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 transition-all duration-200 shadow-sm"
                 >
                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -1464,16 +1692,16 @@ export default function ChatPage() {
         </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center bg-[#0D0D0D]">
+          <div className="flex-1 flex items-center justify-center bg-[var(--chat-bg)]">
             <div className="text-center max-w-lg mx-auto p-12">
-              <div className="w-32 h-32 bg-[#D4AF37] rounded-2xl flex items-center justify-center mx-auto mb-8 border border-[#D4AF37]">
-                <svg className="w-16 h-16 text-[#0D0D0D]" fill="currentColor" viewBox="0 0 24 24">
+              <div className="w-32 h-32 bg-[var(--accent)] rounded-2xl flex items-center justify-center mx-auto mb-8 border border-[var(--accent)] shadow-lg">
+                <svg className="w-16 h-16 text-[var(--text-inverse)]" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
                 </svg>
               </div>
-              <h2 className="text-3xl font-bold text-[#EAEAEA] mb-4">Welcome to ChatApp</h2>
-              <p className="text-[#C0C0C0] text-lg mb-6 font-medium">Connect with your team members</p>
-              <p className="text-[#C0C0C0] text-base">Select a team member from the sidebar to start chatting</p>
+              <h2 className="text-3xl font-bold text-[var(--text-primary)] mb-4">Welcome to ChatApp</h2>
+              <p className="text-[var(--text-secondary)] text-lg mb-6 font-medium">Connect with your team members</p>
+              <p className="text-[var(--text-secondary)] text-base">Select a team member from the sidebar to start chatting</p>
             </div>
         </div>
         )}

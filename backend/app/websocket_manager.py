@@ -2,6 +2,7 @@ from typing import Dict, List, Set
 import json
 import asyncio
 from fastapi import WebSocket
+from starlette.websockets import WebSocketState
 
 class ConnectionManager:
     def __init__(self):

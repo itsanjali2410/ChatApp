@@ -22,6 +22,8 @@ interface MessageBubbleProps {
     attachment?: FileAttachment;
     timestamp: string;
     status?: 'sent' | 'delivered' | 'read';
+    seen_at?: string;
+    seen_by?: string;
   };
   isSelf: boolean;
   isTemp?: boolean;
@@ -46,6 +48,28 @@ export default function MessageBubble({ message, isSelf, isTemp = false, onDelet
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const formatSeenTime = (seenAt: string) => {
+    try {
+      const seenDate = new Date(seenAt);
+      if (isNaN(seenDate.getTime())) return null;
+      
+      const now = new Date();
+      const diffMs = now.getTime() - seenDate.getTime();
+      const diffMins = Math.floor(diffMs / (1000 * 60));
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      
+      if (diffMins < 1) return 'Seen just now';
+      if (diffMins < 60) return `Seen ${diffMins}m ago`;
+      if (diffHours < 24) return `Seen ${diffHours}h ago`;
+      if (diffDays < 7) return `Seen ${diffDays}d ago`;
+      
+      return `Seen ${seenDate.toLocaleDateString()}`;
+    } catch (error) {
+      return null;
+    }
   };
 
   const handleCopy = () => {
@@ -147,10 +171,10 @@ export default function MessageBubble({ message, isSelf, isTemp = false, onDelet
       case 'read':
         return (
           <div className="flex">
-            <svg className="w-3 h-3 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+            <svg className="w-3 h-3 text-[var(--accent)]" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
             </svg>
-            <svg className="w-3 h-3 -ml-1 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+            <svg className="w-3 h-3 -ml-1 text-[var(--accent)]" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
             </svg>
           </div>
@@ -428,7 +452,7 @@ export default function MessageBubble({ message, isSelf, isTemp = false, onDelet
           {/* Sender name for group chats */}
           {isGroupChat && !isSelf && senderName && (
             <div className="mb-2 ml-2">
-              <span className="text-xs font-semibold text-slate-600">
+              <span className="text-xs font-semibold text-[var(--text-secondary)]">
                 {senderName}
               </span>
             </div>
@@ -437,10 +461,10 @@ export default function MessageBubble({ message, isSelf, isTemp = false, onDelet
           <div
             ref={messageRef}
             className={`${isImageMessage ? 'max-w-sm lg:max-w-lg' : 'max-w-xs lg:max-w-md'} px-4 py-3 rounded-lg ${isSelf
-                ? 'bg-[#D4AF37] text-[#0D0D0D]'
-                : 'bg-[#121212] border border-[#D4AF37]'
+                ? 'bg-[var(--message-sent)] text-[var(--message-text-sent)]'
+                : 'bg-[var(--message-received)] text-[var(--message-text-received)] border border-[var(--border)]'
               } ${isTemp ? 'opacity-70' : ''} ${isImageMessage ? 'p-2' : ''
-              } relative group ${isLongPressing ? 'scale-105' : ''} transition-all duration-200`}
+              } relative group ${isLongPressing ? 'scale-105' : ''} transition-all duration-200 shadow-sm`}
             style={{
               borderRadius: isSelf
                 ? '20px 20px 6px 20px'
@@ -489,7 +513,7 @@ export default function MessageBubble({ message, isSelf, isTemp = false, onDelet
 
           {renderAttachment()}
 
-          <div className={`text-xs mt-2 flex items-center justify-end ${isSelf ? 'text-[#0D0D0D]/70' : 'text-[#C0C0C0]'
+          <div className={`text-xs mt-2 flex items-center justify-end ${isSelf ? 'text-[var(--message-text-sent)]/70' : 'text-[var(--text-muted)]'
             }`}>
             <span className="flex items-center space-x-1">
               <span>{(() => {
@@ -516,6 +540,12 @@ export default function MessageBubble({ message, isSelf, isTemp = false, onDelet
                 </div>
               )}
             </span>
+            {/* Seen timestamp for read messages */}
+            {isSelf && message.status === 'read' && message.seen_at && (
+              <div className="text-xs text-[var(--text-muted)] mt-1 text-right">
+                {formatSeenTime(message.seen_at)}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -524,7 +554,7 @@ export default function MessageBubble({ message, isSelf, isTemp = false, onDelet
         {showContextMenu && (
           <div
             ref={contextMenuRef}
-            className="absolute z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-32"
+            className="absolute z-50 bg-[var(--secondary)] border border-[var(--border)] rounded-lg shadow-lg py-1 min-w-32"
             style={{
               top: messageRef.current?.getBoundingClientRect().top || 0,
               left: isSelf ? (messageRef.current?.getBoundingClientRect().left || 0) - 130 : (messageRef.current?.getBoundingClientRect().right || 0),
@@ -535,7 +565,7 @@ export default function MessageBubble({ message, isSelf, isTemp = false, onDelet
           >
             <button
               onClick={handleCopy}
-              className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+              className="w-full px-4 py-2 text-left text-sm text-[var(--text-primary)] hover:bg-[var(--secondary-hover)] flex items-center space-x-2"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -545,7 +575,7 @@ export default function MessageBubble({ message, isSelf, isTemp = false, onDelet
             {isSelf && onDelete && (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
-                className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
+                className="w-full px-4 py-2 text-left text-sm text-[var(--error)] hover:bg-[var(--error-light)] flex items-center space-x-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -559,19 +589,19 @@ export default function MessageBubble({ message, isSelf, isTemp = false, onDelet
         {/* Delete Confirmation Modal */}
         {showDeleteConfirm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-sm mx-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Message</h3>
-              <p className="text-gray-600 mb-4">Are you sure you want to delete this message? This action cannot be undone.</p>
+            <div className="bg-[var(--secondary)] rounded-lg p-6 max-w-sm mx-4 shadow-lg">
+              <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Delete Message</h3>
+              <p className="text-[var(--text-secondary)] mb-4">Are you sure you want to delete this message? This action cannot be undone.</p>
               <div className="flex space-x-3">
                 <button
                   onClick={() => setShowDeleteConfirm(false)}
-                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
+                  className="flex-1 px-4 py-2 text-[var(--text-primary)] bg-[var(--secondary-hover)] rounded-lg hover:bg-[var(--border)] transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleDelete}
-                  className="flex-1 px-4 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+                  className="flex-1 px-4 py-2 text-[var(--text-inverse)] bg-[var(--error)] rounded-lg hover:bg-red-700 transition-colors"
                 >
                   Delete
                 </button>

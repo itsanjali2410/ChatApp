@@ -1,11 +1,45 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0D0D0D;
-  --foreground: #EAEAEA;
-  --accent: #D4AF37;
-  --secondary: #121212;
-  --text-secondary: #C0C0C0;
+  /* Primary Colors - Soft and Professional */
+  --background: #f8fafc;
+  --foreground: #ffffff;
+  --accent: #3b82f6;
+  --accent-hover: #5c88e7;
+  --accent-light: #3768a7;
+  
+  /* Secondary Colors */
+  --secondary: #ffffff;
+  --secondary-hover: #f1f5f9;
+  --border: #e2e8f0;
+  --border-light: #f1f5f9;
+  
+  /* Text Colors */
+  --text-primary: #1e293b;
+  --text-secondary: #000;
+  --text-muted: #94a3b8;
+  --text-inverse: #ffffff;
+  
+  /* Status Colors */
+  --success: #10b981;
+  --success-light: #d1fae5;
+  --warning: #f59e0b;
+  --warning-light: #fef3c7;
+  --error: #ef4444;
+  --error-light: #fee2e2;
+  
+  /* Chat Colors */
+  --chat-bg: #ffffff;
+  --chat-sidebar: #f8fafc;
+  --message-sent: #3b82f6;
+  --message-received: #f1f5f9;
+  --message-text-sent: #ffffff;
+  --message-text-received: #1e293b;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 }
 
 @theme inline {
@@ -20,14 +54,34 @@
 
 body {
   background: var(--background);
-  color: var(--foreground);
+  color: var(--text-primary);
   font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Focus styles */
+*:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Selection styles */
+::selection {
+  background-color: var(--accent-light);
+  color: var(--text-primary);
 }
 
 /* Custom scrollbar styles */
 .scrollbar-thin {
   scrollbar-width: thin;
-  scrollbar-color: #D4AF37 #0D0D0D;
+  scrollbar-color: var(--accent) var(--border-light);
 }
 
 .scrollbar-thin::-webkit-scrollbar {
@@ -35,25 +89,66 @@ body {
 }
 
 .scrollbar-thin::-webkit-scrollbar-track {
-  background: #0D0D0D;
+  background: var(--border-light);
   border-radius: 3px;
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: linear-gradient(135deg, #D4AF37, #FFD700);
+  background: var(--accent);
   border-radius: 3px;
+  transition: background-color 0.2s ease;
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(135deg, #FFD700, #FFA500);
+  background: var(--accent-hover);
 }
 
-.scrollbar-thumb-gold::-webkit-scrollbar-thumb {
-  background: linear-gradient(135deg, #D4AF37, #FFD700);
+/* Utility classes */
+.btn-primary {
+  background: var(--accent);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  cursor: pointer;
 }
 
-.scrollbar-track-black::-webkit-scrollbar-track {
-  background: #0D0D0D;
+.btn-primary:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-secondary {
+  background: var(--secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background: var(--secondary-hover);
+  border-color: var(--accent);
+}
+
+.card {
+  background: var(--secondary);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
 }
 
 /* Popup notification animation */

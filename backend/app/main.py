@@ -254,6 +254,37 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                     "timestamp": message_data.get("timestamp") or datetime.utcnow().isoformat() + "Z"
                 }, chat_id, exclude_user=user_id)
                 
+            elif message_type == "mark_delivered":
+                # Handle marking messages as delivered
+                chat_id = message_data.get("chat_id")
+                from .services.message_service import mark_messages_as_delivered
+                updated_count = mark_messages_as_delivered(chat_id, user_id)
+                
+                # Broadcast status update to all users in the chat
+                await manager.broadcast_to_chat({
+                    "type": "messages_delivered",
+                    "chat_id": chat_id,
+                    "user_id": user_id,
+                    "updated_count": updated_count
+                }, chat_id, exclude_user=user_id)
+                
+            elif message_type == "mark_read":
+                # Handle marking messages as read
+                chat_id = message_data.get("chat_id")
+                from .services.message_service import mark_messages_as_read
+                from datetime import datetime
+                updated_count = mark_messages_as_read(chat_id, user_id)
+                seen_timestamp = datetime.utcnow().isoformat() + "Z"
+                
+                # Broadcast status update to all users in the chat
+                await manager.broadcast_to_chat({
+                    "type": "messages_read",
+                    "chat_id": chat_id,
+                    "user_id": user_id,
+                    "updated_count": updated_count,
+                    "seen_at": seen_timestamp
+                }, chat_id, exclude_user=user_id)
+                
     except WebSocketDisconnect:
         # Set user as offline when they disconnect
         if user_role == "admin":

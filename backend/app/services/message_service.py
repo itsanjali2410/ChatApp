@@ -51,7 +51,9 @@ def get_messages(chat_id: str) -> List[dict]:
             "message_type": msg["message_type"],
             "attachment": msg.get("attachment"),  # Include attachment data
             "timestamp": timestamp_str,
-            "status": msg.get("status", "sent")
+            "status": msg.get("status", "sent"),
+            "seen_at": msg.get("seen_at"),
+            "seen_by": msg.get("seen_by")
         }
         if processed_msg["attachment"]:
             print(f"Message with attachment: {processed_msg['id']} - {processed_msg['attachment']}")
@@ -78,3 +80,44 @@ def delete_message(message_id: str) -> bool:
 def update_message(message_id: str, updates: dict) -> bool:
     result = messages_collection.update_one({"_id": ObjectId(message_id)}, {"$set": updates})
     return result.modified_count > 0
+
+def update_message_status(message_id: str, status: str) -> bool:
+    """Update the status of a specific message"""
+    result = messages_collection.update_one(
+        {"_id": ObjectId(message_id)}, 
+        {"$set": {"status": status}}
+    )
+    return result.modified_count > 0
+
+def mark_messages_as_delivered(chat_id: str, sender_id: str) -> int:
+    """Mark all messages in a chat as delivered (except sender's own messages)"""
+    result = messages_collection.update_many(
+        {
+            "chat_id": chat_id,
+            "sender_id": {"$ne": sender_id},
+            "status": "sent"
+        },
+        {"$set": {"status": "delivered"}}
+    )
+    return result.modified_count
+
+def mark_messages_as_read(chat_id: str, user_id: str) -> int:
+    """Mark all messages in a chat as read (except user's own messages)"""
+    from datetime import datetime
+    seen_timestamp = datetime.utcnow().isoformat() + "Z"
+    
+    result = messages_collection.update_many(
+        {
+            "chat_id": chat_id,
+            "sender_id": {"$ne": user_id},
+            "status": {"$in": ["sent", "delivered"]}
+        },
+        {
+            "$set": {
+                "status": "read",
+                "seen_at": seen_timestamp,
+                "seen_by": user_id
+            }
+        }
+    )
+    return result.modified_count

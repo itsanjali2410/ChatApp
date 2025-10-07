@@ -115,17 +115,17 @@ export default function AdminPage() {
 
 
   return (
-    <div className="min-h-screen bg-[#0D0D0D] p-6">
+    <div className="min-h-screen bg-[var(--background)] p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-[#EAEAEA]">Organization Management</h1>
-            <p className="text-[#C0C0C0] mt-1">Manage users and organization settings</p>
+            <h1 className="text-3xl font-bold text-[var(--text-primary)]">Organization Management</h1>
+            <p className="text-[var(--text-secondary)] mt-1">Manage users and organization settings</p>
           </div>
           <button
             onClick={() => router.push("/chat")}
-            className="px-4 py-2 bg-gradient-to-r from-[#D4AF37] to-[#FFD700] text-[#0D0D0D] rounded-lg hover:from-[#FFD700] hover:to-[#FFA500] transition-all duration-200 shadow-lg hover:shadow-xl flex items-center"
+            className="px-4 py-2 bg-[var(--accent)] text-[var(--text-inverse)] rounded-lg hover:bg-[var(--accent-hover)] transition-all duration-200 shadow-sm hover:shadow-md flex items-center"
           >
             <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -148,21 +148,21 @@ export default function AdminPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Organization Invites */}
-          <div className="bg-[#121212] border border-[#D4AF37] rounded-xl p-6">
-            <h2 className="text-xl font-semibold text-[#EAEAEA] mb-4">Organization Invites</h2>
-            <p className="text-[#C0C0C0] mb-4">Generate invite links for new users to join your organization.</p>
+          <div className="bg-[var(--secondary)] border border-[var(--border)] rounded-xl p-6">
+            <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-4">Organization Invites</h2>
+            <p className="text-[var(--text-secondary)] mb-4">Generate invite links for new users to join your organization.</p>
             <button 
               onClick={handleGenerateInvite} 
-              className="w-full px-4 py-2 bg-gradient-to-r from-[#D4AF37] to-[#FFD700] text-[#0D0D0D] rounded-lg hover:from-[#FFD700] hover:to-[#FFA500] transition-all duration-200 shadow-lg hover:shadow-xl"
+              className="w-full px-4 py-2 bg-[var(--accent)] text-[var(--text-inverse)] rounded-lg hover:bg-[var(--accent-hover)] transition-all duration-200 shadow-sm hover:shadow-md"
             >
               Generate Invite Link
             </button>
             {inviteToken && (
-              <div className="mt-4 p-4 bg-[#1A1A1A] border border-[#D4AF37] rounded-lg">
-                <div className="text-sm font-medium text-[#EAEAEA] mb-2">Invite Token:</div>
-                <code className="block text-xs text-[#C0C0C0] break-all mb-3">{inviteToken}</code>
-                <div className="text-sm font-medium text-[#EAEAEA] mb-2">Share this signup link:</div>
-                <code className="block text-xs text-[#D4AF37] break-all">
+              <div className="mt-4 p-4 bg-[var(--secondary-hover)] border border-[var(--border)] rounded-lg">
+                <div className="text-sm font-medium text-[var(--text-primary)] mb-2">Invite Token:</div>
+                <code className="block text-xs text-[var(--text-secondary)] break-all mb-3">{inviteToken}</code>
+                <div className="text-sm font-medium text-[var(--text-primary)] mb-2">Share this signup link:</div>
+                <code className="block text-xs text-[var(--accent)] break-all">
                   {`${typeof window !== 'undefined' ? window.location.origin : ''}/signup?org=${orgId}&token=${inviteToken}`}
                 </code>
               </div>
@@ -170,31 +170,31 @@ export default function AdminPage() {
           </div>
 
           {/* Add User */}
-          <div className="bg-[#121212] border border-[#D4AF37] rounded-xl p-6">
-            <h2 className="text-xl font-semibold text-[#EAEAEA] mb-4">Add New User</h2>
+          <div className="bg-[var(--secondary)] border border-[var(--border)] rounded-xl p-6">
+            <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-4">Add New User</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[#EAEAEA] mb-1">Username</label>
+                <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">Username</label>
                 <input 
-                  className="w-full px-3 py-2 border border-[#D4AF37] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/20 focus:border-[#D4AF37] bg-[#0D0D0D] text-[#EAEAEA] placeholder-[#C0C0C0]" 
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--border)] bg-[var(--secondary)] text-[var(--text-primary)] placeholder-[var(--text-muted)]" 
                   placeholder="Enter username" 
                   value={newUser.username} 
                   onChange={(e) => setNewUser({ ...newUser, username: e.target.value })} 
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#EAEAEA] mb-1">Email</label>
+                <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">Email</label>
                 <input 
-                  className="w-full px-3 py-2 border border-[#D4AF37] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/20 focus:border-[#D4AF37] bg-[#0D0D0D] text-[#EAEAEA] placeholder-[#C0C0C0]" 
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--border)] bg-[var(--secondary)] text-[var(--text-primary)] placeholder-[var(--text-muted)]" 
                   placeholder="Enter email" 
                   value={newUser.email} 
                   onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} 
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#EAEAEA] mb-1">Password</label>
+                <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">Password</label>
                 <input 
-                  className="w-full px-3 py-2 border border-[#D4AF37] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/20 focus:border-[#D4AF37] bg-[#0D0D0D] text-[#EAEAEA] placeholder-[#C0C0C0]" 
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--border)] bg-[var(--secondary)] text-[var(--text-primary)] placeholder-[var(--text-muted)]" 
                   placeholder="Enter password" 
                   type="password" 
                   value={newUser.password} 
@@ -202,7 +202,7 @@ export default function AdminPage() {
                 />
               </div>
               <button 
-                className="w-full px-4 py-2 bg-gradient-to-r from-[#D4AF37] to-[#FFD700] text-[#0D0D0D] rounded-lg hover:from-[#FFD700] hover:to-[#FFA500] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl" 
+                className="w-full px-4 py-2 bg-[var(--accent)] text-[var(--text-inverse)] rounded-lg hover:bg-[var(--accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md" 
                 onClick={addUser}
                 disabled={loading}
               >
@@ -213,38 +213,38 @@ export default function AdminPage() {
         </div>
 
         {/* Users List */}
-        <div className="mt-8 bg-[#121212] border border-[#D4AF37] rounded-xl p-6">
-          <h2 className="text-xl font-semibold text-[#EAEAEA] mb-6">Organization Users ({users.length})</h2>
+        <div className="mt-8 bg-[var(--secondary)] border border-[var(--border)] rounded-xl p-6">
+          <h2 className="text-xl font-semibold text-[var(--text-primary)] mb-6">Organization Users ({users.length})</h2>
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-[#D4AF37]">
-                  <th className="text-left py-3 px-4 font-medium text-[#EAEAEA]">User</th>
-                  <th className="text-left py-3 px-4 font-medium text-[#EAEAEA]">Email</th>
-                  <th className="text-left py-3 px-4 font-medium text-[#EAEAEA]">Role</th>
-                  {/* <th className="text-left py-3 px-4 font-medium text-[#EAEAEA]">Status</th> */}
-                  <th className="text-right py-3 px-4 font-medium text-[#EAEAEA]">Actions</th>
+                <tr className="border-b border-[var(--border)]">
+                  <th className="text-left py-3 px-4 font-medium text-[var(--text-primary)]">User</th>
+                  <th className="text-left py-3 px-4 font-medium text-[var(--text-primary)]">Email</th>
+                  <th className="text-left py-3 px-4 font-medium text-[var(--text-primary)]">Role</th>
+                  {/* <th className="text-left py-3 px-4 font-medium text-[var(--text-primary)]">Status</th> */}
+                  <th className="text-right py-3 px-4 font-medium text-[var(--text-primary)]">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {users.map((user) => (
-                  <tr key={user._id} className="border-b border-[#D4AF37]/20 hover:bg-[#1A1A1A]">
+                  <tr key={user._id} className="border-b border-[var(--border)]/20 hover:bg-[var(--secondary-hover)]">
                     <td className="py-3 px-4">
                       <div className="flex items-center">
-                        <div className="w-8 h-8 bg-gradient-to-br from-[#D4AF37] to-[#FFD700] rounded-full flex items-center justify-center text-[#0D0D0D] text-sm font-medium shadow-sm">
+                        <div className="w-8 h-8 bg-[var(--accent)] rounded-full flex items-center justify-center text-[var(--text-inverse)] text-sm font-medium shadow-sm">
                           {(user.username || user.email).charAt(0).toUpperCase()}
                         </div>
-                        <span className="ml-3 font-medium text-[#EAEAEA]">
+                        <span className="ml-3 font-medium text-[var(--text-primary)]">
                           {user.username || user.name || "N/A"}
                         </span>
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-[#C0C0C0]">{user.email}</td>
+                    <td className="py-3 px-4 text-[var(--text-secondary)]">{user.email}</td>
                     <td className="py-3 px-4">
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                         user.role === 'admin' 
-                          ? 'bg-gradient-to-r from-[#D4AF37] to-[#FFD700] text-[#0D0D0D] shadow-sm' 
-                          : 'bg-gradient-to-r from-[#D4AF37] to-[#FFD700] text-[#0D0D0D] shadow-sm'
+                          ? 'bg-[var(--accent)] text-[var(--text-inverse)] shadow-sm' 
+                          : 'bg-[var(--accent)] text-[var(--text-inverse)] shadow-sm'
                       }`}>
                         {user.role || 'user'}
                       </span>
@@ -262,7 +262,7 @@ export default function AdminPage() {
                       <div className="flex items-center justify-end space-x-2">
                         <button
                           onClick={() => editUser(user)}
-                          className="text-[#D4AF37] hover:text-[#FFD700] text-sm font-medium transition-colors"
+                          className="text-[var(--accent)] hover:text-[var(--accent-hover)] text-sm font-medium transition-colors"
                         >
                           Edit
                         </button>
@@ -284,12 +284,12 @@ export default function AdminPage() {
         {/* Edit User Modal */}
         {editingUser && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-[#121212] border border-[#D4AF37] rounded-xl shadow-xl w-full max-w-md">
-              <div className="flex items-center justify-between p-6 border-b border-[#D4AF37]">
-                <h3 className="text-lg font-semibold text-[#EAEAEA]">Edit User</h3>
+            <div className="bg-[var(--secondary)] border border-[var(--border)] rounded-xl shadow-xl w-full max-w-md">
+              <div className="flex items-center justify-between p-6 border-b border-[var(--border)]">
+                <h3 className="text-lg font-semibold text-[var(--text-primary)]">Edit User</h3>
                 <button
                   onClick={() => setEditingUser(null)}
-                  className="text-[#C0C0C0] hover:text-[#D4AF37]"
+                  className="text-[var(--text-secondary)] hover:text-[var(--accent)]"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -298,27 +298,27 @@ export default function AdminPage() {
               </div>
               <div className="p-6 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-[#EAEAEA] mb-1">Username</label>
+                  <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">Username</label>
                   <input
-                    className="w-full px-3 py-2 border border-[#D4AF37] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/20 focus:border-[#D4AF37] bg-[#0D0D0D] text-[#EAEAEA] placeholder-[#C0C0C0]"
+                    className="w-full px-3 py-2 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--border)] bg-[var(--secondary)] text-[var(--text-primary)] placeholder-[var(--text-muted)]"
                     value={editForm.username}
                     onChange={(e) => setEditForm({ ...editForm, username: e.target.value })}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[#EAEAEA] mb-1">Email</label>
+                  <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">Email</label>
                   <input
-                    className="w-full px-3 py-2 border border-[#D4AF37] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/20 focus:border-[#D4AF37] bg-[#0D0D0D] text-[#EAEAEA] placeholder-[#C0C0C0]"
+                    className="w-full px-3 py-2 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--border)] bg-[var(--secondary)] text-[var(--text-primary)] placeholder-[var(--text-muted)]"
                     value={editForm.email}
                     onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
                     disabled
                   />
-                  <p className="text-xs text-[#C0C0C0] mt-1">Email cannot be changed</p>
+                  <p className="text-xs text-[var(--text-secondary)] mt-1">Email cannot be changed</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[#EAEAEA] mb-1">New Password (optional)</label>
+                  <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">New Password (optional)</label>
                   <input
-                    className="w-full px-3 py-2 border border-[#D4AF37] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/20 focus:border-[#D4AF37] bg-[#0D0D0D] text-[#EAEAEA] placeholder-[#C0C0C0]"
+                    className="w-full px-3 py-2 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--border)] bg-[var(--secondary)] text-[var(--text-primary)] placeholder-[var(--text-muted)]"
                     type="password"
                     placeholder="Leave blank to keep current password"
                     value={editForm.password}
@@ -326,17 +326,17 @@ export default function AdminPage() {
                   />
                 </div>
               </div>
-              <div className="flex items-center justify-end space-x-3 p-6 border-t border-[#D4AF37]">
+              <div className="flex items-center justify-end space-x-3 p-6 border-t border-[var(--border)]">
                 <button
                   onClick={() => setEditingUser(null)}
-                  className="px-4 py-2 text-[#C0C0C0] bg-[#1A1A1A] border border-[#D4AF37] rounded-lg hover:bg-[#2A2A2A] transition-colors"
+                  className="px-4 py-2 text-[var(--text-secondary)] bg-[var(--secondary-hover)] border border-[var(--border)] rounded-lg hover:bg-[#3b82f6] transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={updateUser}
                   disabled={loading}
-                  className="px-4 py-2 bg-gradient-to-r from-[#D4AF37] to-[#FFD700] text-[#0D0D0D] rounded-lg hover:from-[#FFD700] hover:to-[#FFA500] disabled:opacity-50 transition-all duration-200 shadow-lg hover:shadow-xl"
+                  className="px-4 py-2 bg-[var(--accent)] text-[var(--text-inverse)] rounded-lg hover:bg-[var(--accent-hover)] disabled:opacity-50 transition-all duration-200 shadow-sm hover:shadow-md"
                 >
                   {loading ? "Updating..." : "Update User"}
                 </button>

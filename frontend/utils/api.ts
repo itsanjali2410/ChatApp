@@ -79,4 +79,20 @@ export const getFileUrl = (filePath: string | undefined | null): string => {
   return `${API_URL}/files/${filePath}`;
 };
 
+// Message status functions
+export const markMessagesAsDelivered = async (chatId: string) => {
+  const response = await instance.post(`/messages/mark-delivered/${chatId}`);
+  return response.data;
+};
+
+export const markMessagesAsRead = async (chatId: string) => {
+  const response = await instance.post(`/messages/mark-read/${chatId}`);
+  return response.data;
+};
+
+export const updateMessageStatus = async (messageId: string, status: string) => {
+  const response = await instance.put(`/messages/${messageId}/status`, { status });
+  return response.data;
+};
+
 export default instance;

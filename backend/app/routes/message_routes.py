@@ -2,7 +2,8 @@ from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 from ..models.message import ChatMessage
 from ..services.message_service import (
-    send_message, get_messages, get_message, delete_message, update_message
+    send_message, get_messages, get_message, delete_message, update_message,
+    mark_messages_as_delivered, mark_messages_as_read, update_message_status
 )
 from ..dependencies.auth import get_current_user
 from ..services.chat_service import get_chat
@@ -201,3 +202,91 @@ def remove_message(message_id: str, current_user=Depends(get_current_user)):
     if not success:
         raise HTTPException(status_code=404, detail="Message not found")
     return {"message": "Message deleted"}
+
+# Mark messages as delivered
+@router.post("/mark-delivered/{chat_id}")
+def mark_delivered(chat_id: str, current_user=Depends(get_current_user)):
+    # Verify user has access to the chat
+    chat = get_chat(chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    
+    # Get user ID from database using email
+    from ..services.user_service import get_user_by_email
+    from ..services.admin_service import get_admin_by_email
+    
+    user_email = current_user.get("sub")
+    user = get_user_by_email(user_email) or get_admin_by_email(user_email)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user_id = str(user["_id"])
+    user_org_id = current_user.get("org_id")
+    
+    if user_id not in chat.get("participants", []) or chat.get("organization_id") != user_org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    updated_count = mark_messages_as_delivered(chat_id, user_id)
+    return {"message": f"Marked {updated_count} messages as delivered"}
+
+# Mark messages as read
+@router.post("/mark-read/{chat_id}")
+def mark_read(chat_id: str, current_user=Depends(get_current_user)):
+    # Verify user has access to the chat
+    chat = get_chat(chat_id)
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    
+    # Get user ID from database using email
+    from ..services.user_service import get_user_by_email
+    from ..services.admin_service import get_admin_by_email
+    
+    user_email = current_user.get("sub")
+    user = get_user_by_email(user_email) or get_admin_by_email(user_email)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user_id = str(user["_id"])
+    user_org_id = current_user.get("org_id")
+    
+    if user_id not in chat.get("participants", []) or chat.get("organization_id") != user_org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    updated_count = mark_messages_as_read(chat_id, user_id)
+    return {"message": f"Marked {updated_count} messages as read"}
+
+# Update specific message status
+@router.put("/{message_id}/status")
+def update_status(message_id: str, status_data: dict, current_user=Depends(get_current_user)):
+    status = status_data.get("status")
+    if not status or status not in ["sent", "delivered", "read"]:
+        raise HTTPException(status_code=400, detail="Invalid status. Must be 'sent', 'delivered', or 'read'")
+    
+    # Verify user has access to the message
+    msg = get_message(message_id)
+    if not msg:
+        raise HTTPException(status_code=404, detail="Message not found")
+    
+    chat = get_chat(msg["chat_id"])
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    
+    # Get user ID from database using email
+    from ..services.user_service import get_user_by_email
+    from ..services.admin_service import get_admin_by_email
+    
+    user_email = current_user.get("sub")
+    user = get_user_by_email(user_email) or get_admin_by_email(user_email)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user_id = str(user["_id"])
+    user_org_id = current_user.get("org_id")
+    
+    if user_id not in chat.get("participants", []) or chat.get("organization_id") != user_org_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    success = update_message_status(message_id, status)
+    if not success:
+        raise HTTPException(status_code=404, detail="Message not found or not updated")
+    return {"message": f"Message status updated to {status}"}

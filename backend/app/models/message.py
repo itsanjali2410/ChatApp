@@ -26,3 +26,5 @@ class ChatMessage(BaseModel):
     attachment: Optional[FileAttachment] = None
     status: MessageStatus = MessageStatus.sent
     timestamp: Optional[datetime] = None
+    seen_at: Optional[datetime] = None
+    seen_by: Optional[str] = None  # User ID who saw the message
