@@ -3,7 +3,7 @@ module.exports = {
     name: 'chatapp-frontend',
     script: 'npm',
     args: 'start',
-    cwd: '/var/www/chatapp/frontend',
+    cwd: '/var/www/Tripstars/chatapp/frontend',
     env: {
       NODE_ENV: 'production',
       PORT: 3000
