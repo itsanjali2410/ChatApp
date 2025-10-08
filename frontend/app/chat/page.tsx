@@ -589,7 +589,9 @@ export default function ChatPage() {
       markChatAsRead(newChat.id);
       
       // Hide sidebar on mobile when chat is opened
-      setShowSidebar(false);
+      if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+        setShowSidebar(false);
+      }
       
       // Join the chat via WebSocket
       if (isConnected) {
@@ -625,7 +627,9 @@ export default function ChatPage() {
     markChatAsRead(chat.id);
     
     // Hide sidebar on mobile when chat is opened
-    setShowSidebar(false);
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setShowSidebar(false);
+    }
     
     // Join the chat via WebSocket
     if (isConnected) {
@@ -821,6 +825,11 @@ export default function ChatPage() {
 
   const handleTyping = (e: React.ChangeEvent<HTMLInputElement>) => {
     setNewMessage(e.target.value);
+    
+    // Ensure sidebar is hidden when typing on mobile
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setShowSidebar(false);
+    }
     
     if (!isTyping && activeChat && isConnected) {
       setIsTyping(true);
@@ -1062,6 +1071,23 @@ export default function ChatPage() {
           }
           .sidebar.hidden {
             transform: translateX(-100%);
+          }
+          
+          /* Mobile input area improvements */
+          .safe-area-pb {
+            padding-bottom: env(safe-area-inset-bottom, 1rem);
+          }
+          
+          /* Prevent zoom on input focus on iOS */
+          input[type="text"], input[type="email"], input[type="password"], textarea {
+            font-size: 16px;
+          }
+          
+          /* Ensure input area stays visible when keyboard appears */
+          .chat-input-container {
+            position: sticky;
+            bottom: 0;
+            z-index: 10;
           }
         }
       `}</style>
@@ -1644,7 +1670,7 @@ export default function ChatPage() {
             </div>
             
              {/* Message Input */}
-             <div className="bg-[var(--secondary)] px-4 sm:px-6 py-4 border-t border-[var(--border)] flex-shrink-0 shadow-lg">
+             <div className="bg-[var(--secondary)] px-4 sm:px-6 py-4 border-t border-[var(--border)] flex-shrink-0 shadow-lg safe-area-pb chat-input-container">
               {showFileUpload && (
                  <div className="mb-4 p-4 bg-[var(--secondary-hover)] rounded-lg border border-[var(--border)] shadow-sm">
                   <FileUpload
@@ -1671,6 +1697,12 @@ export default function ChatPage() {
                     value={newMessage} 
                   onChange={handleTyping}
                   onKeyPress={handleKeyPress}
+                  onFocus={() => {
+                    // Ensure sidebar is hidden when input is focused on mobile
+                    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                      setShowSidebar(false);
+                    }
+                  }}
                      placeholder="Type a message..."
                      className="w-full px-4 py-3 pr-12 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] text-sm lg:text-base bg-[var(--secondary)] text-[var(--text-primary)] placeholder-[var(--text-muted)] transition-all duration-200"
                   />
