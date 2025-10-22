@@ -23,7 +23,7 @@ const LoginPage = () => {
       localStorage.setItem("email", email);
       if (user_id) localStorage.setItem("user_id", user_id);
 
-      const target = role === "admin" ? "/admin/org" : (org_id ? "/dashboard" : "/organization/create");
+      const target = org_id ? "/chat" : "/organization/create";
       router.push(target);
     } catch (err: any) {
       const detail = err?.response?.data?.detail || "Login failed";
@@ -37,6 +37,19 @@ const LoginPage = () => {
     <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo/Header */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-[var(--accent)] rounded-xl shadow-lg mb-4">
+            <svg className="w-8 h-8 text-[var(--text-inverse)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+          </div>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-2">
+            Welcome to ChatApp
+          </h1>
+          <p className="text-[var(--text-secondary)] text-sm">
+            Sign in to your account to continue
+          </p>
+        </div>
 
         {/* Login Form */}
         <div className="bg-[var(--secondary)] rounded-xl border border-[var(--border)] p-8 shadow-lg">

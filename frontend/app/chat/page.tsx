@@ -8,7 +8,7 @@ import { notificationService } from "../../utils/notificationService";
 import FileUpload from "../../components/FileUpload";
 import MessageBubble from "../../components/MessageBubble";
 import OnlineUsers from "../../components/OnlineUsers";
-import ProfileManager from "../../components/ProfileManager";
+import SettingsModal from "../../components/SettingsModal";
 import GroupCreationModal from "../../components/GroupCreationModal";
 import GroupManagementModal from "../../components/GroupManagementModal";
 
@@ -74,7 +74,7 @@ export default function ChatPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [otherUserTyping, setOtherUserTyping] = useState(false);
   const [showFileUpload, setShowFileUpload] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [showOnlineUsers, setShowOnlineUsers] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [lastMessages, setLastMessages] = useState<{[chatId: string]: string}>({});
@@ -88,12 +88,12 @@ export default function ChatPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showSidebar, setShowSidebar] = useState(false);
 
-  // On mobile, show sidebar (users list) by default; hide it on desktop
+  // Show sidebar by default on web, hide on mobile initially
   useEffect(() => {
     const updateSidebarForViewport = () => {
       if (typeof window === 'undefined') return;
       const isMobile = window.innerWidth < 1024; // lg breakpoint
-      setShowSidebar(isMobile ? true : false);
+      setShowSidebar(isMobile ? false : true);
     };
 
     updateSidebarForViewport();
@@ -259,6 +259,14 @@ export default function ChatPage() {
           msg.id === data.message_id
             ? { ...msg, status: data.status }
             : msg
+        ));
+      } else if (data.type === "user_status") {
+        // Handle user online/offline status updates
+        console.log("User status update:", data);
+        setUsers(prev => prev.map(user => 
+          user._id === data.user_id
+            ? { ...user, is_online: data.is_online }
+            : user
         ));
       }
     },
@@ -1036,21 +1044,6 @@ export default function ChatPage() {
     );
   }
 
-  if (showProfile) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-4">
-        <div className="max-w-4xl mx-auto">
-          <button
-            onClick={() => setShowProfile(false)}
-            className="mb-4 btn-secondary"
-          >
-            ← Back to Chat
-          </button>
-          <ProfileManager onProfileUpdate={setCurrentUser} />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <>
@@ -1061,10 +1054,85 @@ export default function ChatPage() {
           font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
         }
         
+        /* Mobile-first responsive design */
+        @media (max-width: 640px) {
+          /* Small mobile devices */
+          .sidebar {
+            width: 100vw;
+            max-width: 100vw;
+          }
+          
+          .chat-header {
+            padding: 0.75rem 1rem;
+          }
+          
+          .message-input {
+            padding: 0.75rem 1rem;
+          }
+          
+          .user-list-item {
+            padding: 0.75rem 1rem;
+          }
+          
+          .popup-notification {
+            top: 1rem;
+            right: 1rem;
+            left: 1rem;
+            max-width: none;
+          }
+        }
+        
+        @media (min-width: 641px) and (max-width: 768px) {
+          /* Large mobile devices */
+          .sidebar {
+            width: 85vw;
+            max-width: 400px;
+          }
+          
+          .popup-notification {
+            right: 1rem;
+            left: auto;
+            max-width: 20rem;
+          }
+        }
+        
+        @media (min-width: 769px) and (max-width: 1024px) {
+          /* Tablets */
+          .sidebar {
+            width: 20rem;
+            max-width: 20rem;
+          }
+          
+          .chat-area {
+            flex: 1;
+            min-width: 0;
+          }
+        }
+        
+        @media (min-width: 1025px) {
+          /* Desktop */
+          .sidebar {
+            width: 20rem;
+            max-width: 20rem;
+            position: relative;
+            transform: none !important;
+          }
+          
+          .main-layout {
+            flex-direction: row;
+          }
+        }
+        
+        /* Sidebar transitions */
         @media (max-width: 1024px) {
           .sidebar {
             transform: translateX(-100%);
             transition: transform 0.3s ease-in-out;
+            position: fixed;
+            z-index: 50;
+            height: 100vh;
+            top: 0;
+            left: 0;
           }
           .sidebar.show {
             transform: translateX(0);
@@ -1072,56 +1140,142 @@ export default function ChatPage() {
           .sidebar.hidden {
             transform: translateX(-100%);
           }
-          
-          /* Mobile input area improvements */
-          .safe-area-pb {
-            padding-bottom: env(safe-area-inset-bottom, 1rem);
+        }
+        
+        /* Mobile input area improvements */
+        .safe-area-pb {
+          padding-bottom: env(safe-area-inset-bottom, 1rem);
+        }
+        
+        /* Prevent zoom on input focus on iOS */
+        input[type="text"], input[type="email"], input[type="password"], textarea {
+          font-size: 16px;
+        }
+        
+        /* Ensure input area stays visible when keyboard appears */
+        .chat-input-container {
+          position: sticky;
+          bottom: 0;
+          z-index: 10;
+        }
+        
+        /* Responsive text sizes */
+        @media (max-width: 640px) {
+          .text-responsive-lg {
+            font-size: 1rem;
+            line-height: 1.5rem;
           }
           
-          /* Prevent zoom on input focus on iOS */
-          input[type="text"], input[type="email"], input[type="password"], textarea {
-            font-size: 16px;
+          .text-responsive-xl {
+            font-size: 1.125rem;
+            line-height: 1.75rem;
           }
           
-          /* Ensure input area stays visible when keyboard appears */
-          .chat-input-container {
-            position: sticky;
-            bottom: 0;
-            z-index: 10;
+          .text-responsive-2xl {
+            font-size: 1.25rem;
+            line-height: 1.75rem;
           }
         }
+        
+        @media (min-width: 641px) {
+          .text-responsive-lg {
+            font-size: 1.125rem;
+            line-height: 1.75rem;
+          }
+          
+          .text-responsive-xl {
+            font-size: 1.25rem;
+            line-height: 1.75rem;
+          }
+          
+          .text-responsive-2xl {
+            font-size: 1.5rem;
+            line-height: 2rem;
+          }
+        }
+        
+        /* Responsive spacing */
+        @media (max-width: 640px) {
+          .space-responsive-x-2 > * + * {
+            margin-left: 0.25rem;
+          }
+          
+          .space-responsive-x-3 > * + * {
+            margin-left: 0.5rem;
+          }
+          
+          .space-responsive-x-4 > * + * {
+            margin-left: 0.75rem;
+          }
+        }
+        
+        @media (min-width: 641px) {
+          .space-responsive-x-2 > * + * {
+            margin-left: 0.5rem;
+          }
+          
+          .space-responsive-x-3 > * + * {
+            margin-left: 0.75rem;
+          }
+          
+          .space-responsive-x-4 > * + * {
+            margin-left: 1rem;
+          }
+        }
+        
+        /* Scrollbar styling for better mobile experience */
+        .scrollbar-thin {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar {
+          width: 4px;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+          background-color: rgba(156, 163, 175, 0.5);
+          border-radius: 2px;
+        }
+        
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+          background-color: rgba(156, 163, 175, 0.7);
+        }
       `}</style>
-      <div className="h-screen bg-[var(--background)] flex flex-col lg:flex-row overflow-hidden relative">
+      <div className="h-screen bg-[var(--background)] flex flex-col lg:flex-row overflow-hidden relative main-layout">
       {/* Mobile Header - Only visible on mobile when sidebar is closed or when in chat */}
-      <div className={`lg:hidden bg-[var(--secondary)] border-b border-[var(--border)] px-4 py-3 flex items-center justify-between shadow-sm transition-opacity duration-300 ${showSidebar && !activeChat ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`lg:hidden bg-[var(--secondary)] border-b border-[var(--border)] px-3 sm:px-4 py-3 flex items-center justify-between shadow-sm transition-opacity duration-300 ${showSidebar ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
         <button
           onClick={() => setShowSidebar(!showSidebar)}
           className="text-[var(--text-secondary)] hover:text-[var(--accent)] p-2 rounded-lg hover:bg-[var(--secondary-hover)] transition-all duration-200"
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">ChatApp</h1>
-        <div className="w-10"></div> {/* Spacer for centering */}
+        <div className="w-8 sm:w-10"></div> {/* Responsive spacer for centering */}
       </div>
 
       {/* Popup Notification */}
       {showPopupNotification && popupMessage && (
-        <div className="fixed top-6 right-6 z-50 bg-[var(--secondary)] rounded-xl shadow-lg border border-[var(--border)] p-6 max-w-sm animate-in slide-in-from-right-5 duration-300">
-          <div className="flex items-start space-x-4">
+        <div className="fixed top-4 sm:top-6 right-4 sm:right-6 left-4 sm:left-auto z-50 bg-[var(--secondary)] rounded-xl shadow-lg border border-[var(--border)] p-4 sm:p-6 max-w-sm sm:max-w-sm animate-in slide-in-from-right-5 duration-300 popup-notification">
+          <div className="flex items-start space-x-3 sm:space-x-4">
             <div className="flex-shrink-0">
-              <div className="w-10 h-10 bg-[var(--accent)] rounded-lg flex items-center justify-center">
-                <svg className="w-5 h-5 text-[var(--text-inverse)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-[var(--accent)] rounded-lg flex items-center justify-center">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5 text-[var(--text-inverse)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
               </div>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-[var(--text-primary)] mb-1">
+              <p className="text-xs sm:text-sm font-semibold text-[var(--text-primary)] mb-1">
                 {popupMessage.sender}
               </p>
-              <p className="text-sm text-[var(--text-secondary)] leading-relaxed">
+              <p className="text-xs sm:text-sm text-[var(--text-secondary)] leading-relaxed">
                 {popupMessage.message}
               </p>
             </div>
@@ -1129,15 +1283,15 @@ export default function ChatPage() {
               onClick={() => setShowPopupNotification(false)}
               className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors duration-200 p-1 rounded-lg hover:bg-[var(--secondary-hover)]"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
         </div>
       )}
-      {/* Mobile Overlay - Only show when sidebar is open and no active chat */}
-      {showSidebar && !activeChat && (
+      {/* Mobile Overlay - Only show when sidebar is open on mobile */}
+      {showSidebar && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden transition-opacity duration-300"
           onClick={() => setShowSidebar(false)}
@@ -1145,17 +1299,17 @@ export default function ChatPage() {
       )}
 
       {/* Sidebar */}
-      <div className={`${showSidebar ? 'sidebar show translate-x-0' : 'sidebar hidden -translate-x-full'} lg:translate-x-0 fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto w-full lg:w-80 bg-[var(--chat-sidebar)] border-r border-[var(--border)] flex flex-col transition-transform duration-300 ease-in-out shadow-lg`}>
+      <div className={`${showSidebar ? 'sidebar show translate-x-0' : 'sidebar hidden -translate-x-full'} lg:translate-x-0 fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto w-full sm:w-85vw sm:max-w-sm lg:w-80 bg-[var(--chat-sidebar)] border-r border-[var(--border)] flex flex-col transition-transform duration-300 ease-in-out shadow-lg`}>
         {/* Header */}
-        <div className="bg-[var(--secondary)] px-6 py-4 flex-shrink-0 border-b border-[var(--border)]">
+        <div className="bg-[var(--secondary)] px-4 sm:px-6 py-3 sm:py-4 flex-shrink-0 border-b border-[var(--border)]">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2 sm:space-x-3">
               {/* Mobile menu button */}
               <button 
-                className="lg:hidden text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--secondary-hover)] p-2 rounded-lg transition-all duration-200"
+                className="lg:hidden text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--secondary-hover)] p-1.5 sm:p-2 rounded-lg transition-all duration-200"
                 onClick={() => setShowSidebar(false)}
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
               </button>
@@ -1165,29 +1319,29 @@ export default function ChatPage() {
                 <img
                       src={getFileUrl(currentUser.profile_picture)}
                   alt="Profile"
-                      className="w-12 h-12 rounded-lg object-cover border-2 border-[var(--accent)]"
+                      className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg object-cover border-2 border-[var(--accent)]"
                 />
               ) : (
-                    <div className="w-12 h-12 rounded-lg bg-[var(--accent)] flex items-center justify-center text-[var(--text-inverse)] font-semibold border-2 border-[var(--accent)]">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-[var(--accent)] flex items-center justify-center text-[var(--text-inverse)] font-semibold border-2 border-[var(--accent)] text-xs sm:text-sm">
                   {getInitials(currentUser)}
                 </div>
               )}
-                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[var(--success)] rounded-full border-2 border-[var(--secondary)]"></div>
+                  <div className="absolute -bottom-1 -right-1 w-3 h-3 sm:w-4 sm:h-4 bg-[var(--success)] rounded-full border-2 border-[var(--secondary)]"></div>
                 </div>
               )}
-              <div className="ml-2">
-                <h1 className="text-xl font-bold text-[var(--text-primary)] tracking-tight">ChatApp</h1>
-                <p className="text-[var(--text-secondary)] text-sm font-medium">
+              <div className="ml-1 sm:ml-2">
+                <h1 className="text-lg sm:text-xl font-bold text-[var(--text-primary)] tracking-tight">Messages</h1>
+                <p className="text-[var(--text-secondary)] text-xs sm:text-sm font-medium">
                   {currentUser?.first_name ? `Hi, ${currentUser.first_name}` : 'Team Chat'}
                 </p>
             </div>
             </div>
               <button 
-                onClick={() => setShowProfile(true)}
-              className="p-2.5 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--secondary-hover)] rounded-lg transition-all duration-200"
+                onClick={() => setShowSettings(true)}
+              className="p-2 sm:p-2.5 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--secondary-hover)] rounded-lg transition-all duration-200"
               title="Settings"
               >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
@@ -1196,10 +1350,10 @@ export default function ChatPage() {
         </div>
 
         {/* Search Bar */}
-        <div className="px-6 py-4 bg-[var(--secondary)] border-b border-[var(--border)] flex-shrink-0">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 bg-[var(--secondary)] border-b border-[var(--border)] flex-shrink-0">
           <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <svg className="h-5 w-5 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="absolute inset-y-0 left-0 pl-3 sm:pl-4 flex items-center pointer-events-none">
+              <svg className="h-4 w-4 sm:h-5 sm:w-5 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </div>
@@ -1208,14 +1362,14 @@ export default function ChatPage() {
               placeholder="Search users and groups..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="block w-full pl-12 pr-12 py-3.5 border border-[var(--border)] rounded-lg text-sm placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] bg-[var(--secondary)] transition-all duration-200"
+              className="block w-full pl-10 sm:pl-12 pr-10 sm:pr-12 py-2.5 sm:py-3.5 border border-[var(--border)] rounded-lg text-xs sm:text-sm placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] bg-[var(--secondary)] transition-all duration-200"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
-                className="absolute inset-y-0 right-0 pr-4 flex items-center text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors duration-200 p-1 rounded-lg hover:bg-[var(--secondary-hover)]"
+                className="absolute inset-y-0 right-0 pr-3 sm:pr-4 flex items-center text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors duration-200 p-1 rounded-lg hover:bg-[var(--secondary-hover)]"
               >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-3 w-3 sm:h-4 sm:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
@@ -1225,12 +1379,12 @@ export default function ChatPage() {
 
         {/* Create Group Button */}
         {canCreateGroup && (
-          <div className="px-6 py-3 border-b border-[var(--border)]">
+          <div className="px-4 sm:px-6 py-2 sm:py-3 border-b border-[var(--border)]">
             <button
               onClick={() => setShowGroupCreation(true)}
-              className="w-full px-4 py-3 bg-[var(--accent)] text-[var(--text-inverse)] rounded-lg hover:bg-[var(--accent-hover)] flex items-center justify-center text-sm font-semibold transition-all duration-200 shadow-sm"
+              className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-[var(--accent)] text-[var(--text-inverse)] rounded-lg hover:bg-[var(--accent-hover)] flex items-center justify-center text-xs sm:text-sm font-semibold transition-all duration-200 shadow-sm"
             >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
               Create Group
@@ -1403,7 +1557,7 @@ export default function ChatPage() {
               return (
                 <div
                   key={user._id}
-                   className={`flex items-center px-6 py-4 hover:bg-[var(--secondary-hover)] border-b border-[var(--border)] group transition-all duration-200 ${
+                   className={`flex items-center px-4 sm:px-6 py-3 sm:py-4 hover:bg-[var(--secondary-hover)] border-b border-[var(--border)] group transition-all duration-200 user-list-item ${
                      activeChat?.id === userChat?.id ? 'bg-[var(--accent-light)] border-l-4 border-l-[var(--accent)]' : ''
                   }`}
                 >
@@ -1412,35 +1566,35 @@ export default function ChatPage() {
                       <img
                         src={getFileUrl(user.profile_picture)}
                         alt={getDisplayName(user)}
-                         className="w-12 h-12 rounded-lg object-cover border border-[var(--accent)]"
+                         className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg object-cover border border-[var(--accent)]"
                       />
                     ) : (
-                       <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-[var(--text-inverse)] text-sm font-bold ${
+                       <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center text-[var(--text-inverse)] text-xs sm:text-sm font-bold ${
                          user.role === 'admin' ? 'bg-[var(--accent)]' : 'bg-[var(--accent)]'
                        }`}>
                         {getInitials(user)}
                       </div>
                     )}
-                    {user.is_online && (
-                       <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-[var(--success)] rounded-full border-2 border-[var(--secondary)]"></span>
+                    {user.is_online && user._id !== myId && (
+                       <span className="absolute -bottom-1 -right-1 w-3 h-3 sm:w-4 sm:h-4 bg-green-500 rounded-full border-2 border-[var(--secondary)]"></span>
                     )}
                   </div>
                    <div 
-                     className="ml-4 flex-1 min-w-0 cursor-pointer"
+                     className="ml-3 sm:ml-4 flex-1 min-w-0 cursor-pointer"
                      onClick={() => openDirectChat(user._id)}
                    >
                     <div className="flex items-center justify-between">
-                       <div className="flex items-center space-x-2">
-                         <p className="text-base font-semibold text-[var(--text-primary)] truncate">
+                       <div className="flex items-center space-x-1.5 sm:space-x-2">
+                         <p className="text-sm sm:text-base font-semibold text-[var(--text-primary)] truncate">
                         {getDisplayName(user)}
                       </p>
                          {user.role === 'admin' && (
-                           <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--accent)] text-[var(--text-inverse)]">
+                           <span className="inline-flex items-center px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-lg text-xs font-semibold bg-[var(--accent)] text-[var(--text-inverse)]">
                              Admin
                            </span>
                          )}
                        </div>
-                       <div className="flex items-center space-x-2">
+                       <div className="flex items-center space-x-1.5 sm:space-x-2">
                          <p className="text-xs text-[var(--text-secondary)] font-medium">
                           {(() => {
                             if (userChat) {
@@ -1466,7 +1620,7 @@ export default function ChatPage() {
                              className="opacity-0 group-hover:opacity-100 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-all"
                              title="Delete chat"
                            >
-                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                             <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                              </svg>
                            </button>
@@ -1483,14 +1637,14 @@ export default function ChatPage() {
                           </span>
                         )}
                       </p>
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-1.5 sm:space-x-2">
                         {userChat && unreadCounts[userChat.id] > 0 && (
-                          <div className="bg-[var(--accent)] text-[var(--text-inverse)] text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-2">
+                          <div className="bg-[var(--accent)] text-[var(--text-inverse)] text-xs font-bold rounded-full min-w-[18px] sm:min-w-[20px] h-4 sm:h-5 flex items-center justify-center px-1.5 sm:px-2">
                             {unreadCounts[userChat.id] > 99 ? '99+' : unreadCounts[userChat.id]}
                         </div>
                       )}
-                        {!user.is_typing && user.is_online && (
-                          <div className="w-2 h-2 bg-[var(--success)] rounded-full"></div>
+                        {!user.is_typing && user.is_online && user._id !== myId && (
+                          <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full"></div>
                         )}
                       </div>
                     </div>
@@ -1503,26 +1657,21 @@ export default function ChatPage() {
       </div>
 
       {/* Main Chat Area */}
-      <div className={`flex-1 flex flex-col bg-[var(--chat-bg)] min-h-0 h-screen w-full lg:relative relative overflow-hidden transition-opacity duration-300 ${showSidebar && !activeChat ? 'lg:opacity-100 opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`flex-1 flex flex-col bg-[var(--chat-bg)] min-h-0 h-screen w-full lg:relative relative overflow-hidden transition-opacity duration-300 chat-area ${showSidebar ? 'lg:opacity-100 opacity-0 pointer-events-none' : 'opacity-100'}`}>
           {activeChat ? (
           <>
             {/* Chat Header */}
-            <div className="bg-[var(--secondary)] px-6 py-4 border-b border-[var(--border)] flex items-center justify-between flex-shrink-0 shadow-sm">
-              <div className="flex items-center space-x-3">
+            <div className="bg-[var(--secondary)] px-4 sm:px-6 py-3 sm:py-4 border-b border-[var(--border)] flex items-center justify-between flex-shrink-0 shadow-sm chat-header">
+              <div className="flex items-center space-x-2 sm:space-x-3">
                 {/* Mobile Back Button */}
                 <button 
-                  className="lg:hidden text-[var(--text-muted)] hover:text-[var(--accent)] p-2 rounded-lg hover:bg-[var(--secondary-hover)] transition-all duration-200"
+                  className="lg:hidden text-[var(--text-muted)] hover:text-[var(--accent)] p-1.5 sm:p-2 rounded-lg hover:bg-[var(--secondary-hover)] transition-all duration-200"
                   onClick={() => {
                     setShowSidebar(true);
                     setActiveChat(null);
                   }}
                 >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                <button className="text-gray-600 hover:text-gray-800">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
@@ -1530,30 +1679,38 @@ export default function ChatPage() {
                 {/* Chat Avatar */}
                 <div className="relative">
                   {activeChat.type === "group" ? (
-                    <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
-                       <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-green-500 rounded-full flex items-center justify-center">
+                       <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                       </svg>
                     </div>
                   ) : (
-                     <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
-                       <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                       <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                       </svg>
                     </div>
                   )}
-                  <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></span>
+                  <span className="absolute -bottom-1 -right-1 w-2 h-2 sm:w-3 sm:h-3 bg-green-500 rounded-full border-2 border-white"></span>
                 </div>
                 
                 {/* Chat Info */}
                 <div>
-                  <h2 className="font-semibold text-[var(--text-primary)] text-lg">
-                    {activeChat.type === "group" 
-                      ? activeChat.group_name 
-                      : getDisplayName(users.find(u => activeChat.participants.includes(u._id) && u._id !== myId) || {} as User)
-                    }
-                  </h2>
-                  <p className="text-sm text-[var(--text-secondary)]">
+                  <div className="flex items-center space-x-1.5 sm:space-x-2">
+                    <h2 className="font-semibold text-[var(--text-primary)] text-base sm:text-lg">
+                      {activeChat.type === "group" 
+                        ? activeChat.group_name 
+                        : getDisplayName(users.find(u => activeChat.participants.includes(u._id) && u._id !== myId) || {} as User)
+                      }
+                    </h2>
+                    {activeChat.type === "direct" && (() => {
+                      const otherUser = users.find(u => activeChat.participants.includes(u._id) && u._id !== myId);
+                      return otherUser?.is_online ? (
+                        <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full"></div>
+                      ) : null;
+                    })()}
+                  </div>
+                  <p className="text-xs sm:text-sm text-[var(--text-secondary)]">
                     {activeChat.type === "group" 
                       ? `${activeChat.participants.length} members`
                       : formatLastSeen(users.find(u => activeChat.participants.includes(u._id) && u._id !== myId))
@@ -1561,29 +1718,15 @@ export default function ChatPage() {
                   </p>
                 </div>
               </div>
-                <div className="flex items-center space-x-4">
-                  {/* Voice Call - Commented out as not enabled */}
-                  {/* <button className="text-gray-600 hover:text-gray-800" title="Voice Call">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                    </svg>
-                  </button> */}
-                  
-                  {/* Video Call - Commented out as not enabled */}
-                  {/* <button className="text-gray-600 hover:text-gray-800" title="Video Call">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                  </button> */}
-                  
+                <div className="flex items-center space-x-2 sm:space-x-4">
                   {/* Group Management Button */}
                   {activeChat.type === "group" && (
                     <button 
                       onClick={() => setShowGroupManagement(true)}
-                      className="text-gray-600 hover:text-gray-800" 
+                      className="text-gray-600 hover:text-gray-800 p-1 sm:p-2 rounded-lg hover:bg-gray-100 transition-all duration-200" 
                       title="Group Info"
                     >
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     </button>
@@ -1596,19 +1739,14 @@ export default function ChatPage() {
                         handleChatDelete(activeChat.id);
                       }
                     }}
-                    className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-full transition-all" 
+                    className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 sm:p-2 rounded-full transition-all" 
                     title="Delete Chat"
                   >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                     </svg>
                   </button>
                   
-                  <button className="text-gray-600 hover:text-gray-800" title="More Options">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                    </svg>
-                  </button>
                 </div>
             </div>
             
@@ -1670,9 +1808,9 @@ export default function ChatPage() {
             </div>
             
              {/* Message Input */}
-             <div className="bg-[var(--secondary)] px-4 sm:px-6 py-4 border-t border-[var(--border)] flex-shrink-0 shadow-lg safe-area-pb chat-input-container">
+             <div className="bg-[var(--secondary)] px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-t border-[var(--border)] flex-shrink-0 shadow-lg safe-area-pb chat-input-container message-input">
               {showFileUpload && (
-                 <div className="mb-4 p-4 bg-[var(--secondary-hover)] rounded-lg border border-[var(--border)] shadow-sm">
+                 <div className="mb-3 sm:mb-4 p-3 sm:p-4 bg-[var(--secondary-hover)] rounded-lg border border-[var(--border)] shadow-sm">
                   <FileUpload
                     onFileUploaded={handleFileUpload}
                     disabled={false}
@@ -1680,13 +1818,13 @@ export default function ChatPage() {
                 </div>
               )}
               
-               <div className="flex items-center space-x-3 px-2">
+               <div className="flex items-center space-x-2 sm:space-x-3 px-1 sm:px-2">
                 <button
                   onClick={() => setShowFileUpload(!showFileUpload)}
-                   className="p-3 text-[var(--text-muted)] hover:text-[var(--accent)] rounded-lg flex-shrink-0 hover:bg-[var(--secondary-hover)] transition-all duration-200"
+                   className="p-2 sm:p-3 text-[var(--text-muted)] hover:text-[var(--accent)] rounded-lg flex-shrink-0 hover:bg-[var(--secondary-hover)] transition-all duration-200"
                   title="Attach File"
                 >
-                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                   </svg>
                 </button>
@@ -1704,10 +1842,10 @@ export default function ChatPage() {
                     }
                   }}
                      placeholder="Type a message..."
-                     className="w-full px-4 py-3 pr-12 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] text-sm lg:text-base bg-[var(--secondary)] text-[var(--text-primary)] placeholder-[var(--text-muted)] transition-all duration-200"
+                     className="w-full px-3 sm:px-4 py-2.5 sm:py-3 pr-10 sm:pr-12 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] text-sm sm:text-base bg-[var(--secondary)] text-[var(--text-primary)] placeholder-[var(--text-muted)] transition-all duration-200"
                   />
-                   <button className="absolute right-3 top-1/2 transform -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--accent)] p-1 rounded-lg hover:bg-[var(--secondary-hover)] transition-all duration-200">
-                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <button className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--accent)] p-1 rounded-lg hover:bg-[var(--secondary-hover)] transition-all duration-200">
+                     <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h1m4 0h1m-6-8h8a2 2 0 012 2v8a2 2 0 01-2 2H8a2 2 0 01-2-2V8a2 2 0 012-2z" />
                     </svg>
                   </button>
@@ -1716,9 +1854,9 @@ export default function ChatPage() {
                     <button
                   onClick={sendMessage}
                   disabled={!newMessage.trim()}
-                   className="p-3 bg-[var(--accent)] text-[var(--text-inverse)] rounded-lg hover:bg-[var(--accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 transition-all duration-200 shadow-sm"
+                   className="p-2 sm:p-3 bg-[var(--accent)] text-[var(--text-inverse)] rounded-lg hover:bg-[var(--accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 transition-all duration-200 shadow-sm"
                 >
-                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                   <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                   </svg>
                 </button>
@@ -1727,15 +1865,15 @@ export default function ChatPage() {
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center bg-[var(--chat-bg)]">
-            <div className="text-center max-w-lg mx-auto p-12">
-              <div className="w-32 h-32 bg-[var(--accent)] rounded-2xl flex items-center justify-center mx-auto mb-8 border border-[var(--accent)] shadow-lg">
-                <svg className="w-16 h-16 text-[var(--text-inverse)]" fill="currentColor" viewBox="0 0 24 24">
+            <div className="text-center max-w-lg mx-auto p-6 sm:p-12">
+              <div className="w-24 h-24 sm:w-32 sm:h-32 bg-[var(--accent)] rounded-2xl flex items-center justify-center mx-auto mb-6 sm:mb-8 border border-[var(--accent)] shadow-lg">
+                <svg className="w-12 h-12 sm:w-16 sm:h-16 text-[var(--text-inverse)]" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
                 </svg>
               </div>
-              <h2 className="text-3xl font-bold text-[var(--text-primary)] mb-4">Welcome to ChatApp</h2>
-              <p className="text-[var(--text-secondary)] text-lg mb-6 font-medium">Connect with your team members</p>
-              <p className="text-[var(--text-secondary)] text-base">Select a team member from the sidebar to start chatting</p>
+              <h2 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)] mb-3 sm:mb-4">Welcome</h2>
+              <p className="text-[var(--text-secondary)] text-base sm:text-lg mb-4 sm:mb-6 font-medium">Connect with your team members</p>
+              <p className="text-[var(--text-secondary)] text-sm sm:text-base">Select a team member from the sidebar to start chatting</p>
             </div>
         </div>
         )}
@@ -1761,6 +1899,13 @@ export default function ChatPage() {
           onGroupUpdated={handleGroupUpdated}
         />
       )}
+
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+        currentUser={currentUser}
+      />
     </div>
     </>
   );
