@@ -467,7 +467,7 @@ export default function SettingsModal({ isOpen, onClose, currentUser }: Settings
                                 {(user.username || user.email).charAt(0).toUpperCase()}
                               </div>
                               <span className="ml-3 font-medium text-[var(--text-primary)]">
-                                {user.username || user.name || "N/A"}
+                                {user.username || user.first_name || user.email || "N/A"}
                               </span>
                             </div>
                           </td>
