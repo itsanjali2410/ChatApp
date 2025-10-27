@@ -145,6 +145,10 @@ def get_file_url(file_path: str) -> str:
     """Generate URL for accessing the file"""
     # Remove the uploads/ prefix and replace backslashes with forward slashes
     relative_path = file_path.replace("uploads\\", "").replace("uploads/", "").replace("\\", "/")
+    
+    # Remove leading slash if present to avoid double slashes
+    relative_path = relative_path.lstrip("/")
+    
     return f"/files/{relative_path}"
 
 def delete_file(file_path: str):

@@ -11,6 +11,7 @@ import OnlineUsers from "../../components/OnlineUsers";
 import SettingsModal from "../../components/SettingsModal";
 import GroupCreationModal from "../../components/GroupCreationModal";
 import GroupManagementModal from "../../components/GroupManagementModal";
+import ThemeToggle from "../../components/ThemeToggle";
 
 // Extend the Window interface to include typingTimeout
 declare global {
@@ -1047,7 +1048,7 @@ export default function ChatPage() {
 
   return (
     <>
-      <style jsx global>{`
+      <style dangerouslySetInnerHTML={{__html: `
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         
         * {
@@ -1245,7 +1246,7 @@ export default function ChatPage() {
         .scrollbar-thin::-webkit-scrollbar-thumb:hover {
           background-color: rgba(156, 163, 175, 0.7);
         }
-      `}</style>
+      `}} />
       <div className="h-screen bg-[var(--background)] flex flex-col lg:flex-row overflow-hidden relative main-layout">
       {/* Mobile Header - Only visible on mobile when sidebar is closed or when in chat */}
       <div className={`lg:hidden bg-[var(--secondary)] border-b border-[var(--border)] px-3 sm:px-4 py-3 flex items-center justify-between shadow-sm transition-opacity duration-300 ${showSidebar ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
@@ -1657,7 +1658,7 @@ export default function ChatPage() {
       </div>
 
       {/* Main Chat Area */}
-      <div className={`flex-1 flex flex-col bg-[var(--chat-bg)] min-h-0 h-screen w-full lg:relative relative overflow-hidden transition-opacity duration-300 chat-area ${showSidebar ? 'lg:opacity-100 opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      <div className={`flex-1 flex flex-col bg-[var(--chat-bg)] min-h-0 h-screen w-full lg:relative relative overflow-hidden transition-opacity duration-300 chat-area ${showSidebar ? 'lg:opacity-100 opacity-0 lg:pointer-events-auto pointer-events-none' : 'opacity-100'}`}>
           {activeChat ? (
           <>
             {/* Chat Header */}
@@ -1842,13 +1843,8 @@ export default function ChatPage() {
                     }
                   }}
                      placeholder="Type a message..."
-                     className="w-full px-3 sm:px-4 py-2.5 sm:py-3 pr-10 sm:pr-12 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] text-sm sm:text-base bg-[var(--secondary)] text-[var(--text-primary)] placeholder-[var(--text-muted)] transition-all duration-200"
+                     className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] text-sm sm:text-base bg-[var(--secondary)] text-[var(--text-primary)] placeholder-[var(--text-muted)] transition-all duration-200"
                   />
-                   <button className="absolute right-2 sm:right-3 top-1/2 transform -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--accent)] p-1 rounded-lg hover:bg-[var(--secondary-hover)] transition-all duration-200">
-                     <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h1m4 0h1m-6-8h8a2 2 0 012 2v8a2 2 0 01-2 2H8a2 2 0 01-2-2V8a2 2 0 012-2z" />
-                    </svg>
-                  </button>
                 </div>
                 
                     <button

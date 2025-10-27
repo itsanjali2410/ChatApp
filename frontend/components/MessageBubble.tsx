@@ -38,8 +38,12 @@ export default function MessageBubble({ message, isSelf, isTemp = false, onDelet
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isLongPressing, setIsLongPressing] = useState(false);
+  const [showThreeDotMenu, setShowThreeDotMenu] = useState(false);
+  const [showDownloadPrompt, setShowDownloadPrompt] = useState(false);
+  const [customFileName, setCustomFileName] = useState('');
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const messageRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
   const formatFileSize = (bytes: number) => {
@@ -140,6 +144,19 @@ export default function MessageBubble({ message, isSelf, isTemp = false, onDelet
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [showContextMenu]);
+
+  const handleMenuClickOutside = (e: MouseEvent) => {
+    if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+      setShowThreeDotMenu(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (showThreeDotMenu) {
+      document.addEventListener('mousedown', handleMenuClickOutside);
+      return () => document.removeEventListener('mousedown', handleMenuClickOutside);
+    }
+  }, [showThreeDotMenu]);
 
   React.useEffect(() => {
     return () => {
@@ -252,54 +269,32 @@ export default function MessageBubble({ message, isSelf, isTemp = false, onDelet
       return (
         <div className="mt-2">
           <div className="relative group">
-            {/* Action buttons overlay */}
-            <div className="absolute top-2 right-2 z-10 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleCopy();
-                }}
-                className="p-1.5 bg-white bg-opacity-90 rounded-full shadow-sm hover:bg-opacity-100 transition-all"
-                title="Copy image"
-              >
-                <svg className="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-              </button>
-              {isSelf && onDelete && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowDeleteConfirm(true);
-                  }}
-                  className="p-1.5 bg-red-500 bg-opacity-90 rounded-full shadow-sm hover:bg-opacity-100 transition-all"
-                  title="Delete image"
-                >
-                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
-              )}
-            </div>
-            
-            {/* Thumbnail preview */}
-            <div className="relative">
+            {/* Image container with hover effect */}
+            <div className="relative bg-gray-100 rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300">
               <img
                 src={getFileUrl(file_url)}
                 alt={filename}
-                className="max-w-xs max-h-64 rounded-lg cursor-pointer hover:opacity-90 transition-all duration-200 shadow-sm object-cover w-full"
+                onError={(e) => {
+                  console.error('Image load error:', filename, getFileUrl(file_url));
+                  // Fallback to original URL if getFileUrl fails
+                  if (!(e.target as HTMLImageElement).src.includes('http')) {
+                    (e.target as HTMLImageElement).src = file_url;
+                  }
+                }}
+                className="w-full max-w-[320px] max-h-[400px] object-cover cursor-pointer transition-transform duration-300 group-hover:scale-105"
+                loading="lazy"
                 onClick={() => {
                   // Create a modal for full image view
                   const modal = document.createElement('div');
-                  modal.className = 'fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4';
+                  modal.className = 'fixed inset-0 bg-black bg-opacity-95 flex items-center justify-center z-50 p-4';
                   modal.innerHTML = `
-                    <div class="relative max-w-6xl max-h-full flex flex-col">
+                    <div class="relative max-w-7xl max-h-full flex flex-col">
                       <div class="flex justify-between items-center mb-4">
                         <h3 class="text-white text-lg font-medium truncate max-w-md">${filename}</h3>
                         <div class="flex space-x-2">
                           <button
                             onclick="this.downloadImage('${getFileUrl(file_url)}', '${filename}')"
-                            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2"
+                            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2 transition-all"
                           >
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -308,7 +303,7 @@ export default function MessageBubble({ message, isSelf, isTemp = false, onDelet
                           </button>
                           <button
                             onclick="this.closeModal()"
-                            class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                            class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
                           >
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -316,23 +311,42 @@ export default function MessageBubble({ message, isSelf, isTemp = false, onDelet
                           </button>
                         </div>
                       </div>
-                      <img src="${getFileUrl(file_url)}" alt="${filename}" class="max-w-full max-h-full rounded-lg object-contain" />
+                      <img src="${getFileUrl(file_url)}" alt="${filename}" class="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl" />
                     </div>
                   `;
                   
                   // Add download functionality
                   (modal as any).downloadImage = async (url: string, filename: string) => {
                     try {
+                      console.log('Downloading image from modal:', url);
+                      
                       const response = await fetch(url);
+                      
+                      if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                      }
+                      
                       const blob = await response.blob();
-                      const downloadUrl = window.URL.createObjectURL(blob);
+                      
+                      // Get content type from response
+                      const contentType = response.headers.get('content-type') || 'image/jpeg';
+                      const typedBlob = new Blob([blob], { type: contentType });
+
+                      // Sanitize filename
+                      const sanitizedFilename = filename.replace(/[<>:"/\\|?*]/g, '_');
+                      
+                      const downloadUrl = window.URL.createObjectURL(typedBlob);
                       const link = document.createElement('a');
                       link.href = downloadUrl;
-                      link.download = filename;
+                      link.download = sanitizedFilename;
+                      link.style.display = 'none';
                       document.body.appendChild(link);
                       link.click();
                       document.body.removeChild(link);
-                      window.URL.revokeObjectURL(downloadUrl);
+                      
+                      setTimeout(() => {
+                        window.URL.revokeObjectURL(downloadUrl);
+                      }, 100);
                     } catch (error) {
                       console.error('Download failed:', error);
                       window.open(url, '_blank');
@@ -352,44 +366,15 @@ export default function MessageBubble({ message, isSelf, isTemp = false, onDelet
                   document.body.appendChild(modal);
                 }}
               />
-              {/* Hover overlay */}
-              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded-lg transition-all duration-200 flex items-center justify-center">
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                  <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              
+              {/* Hover overlay with expand icon */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                <div className="bg-white/90 backdrop-blur-sm rounded-full p-3 shadow-xl transform group-hover:scale-110 transition-transform duration-300">
+                  <svg className="w-8 h-8 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
                   </svg>
                 </div>
               </div>
-            </div>
-            {/* File info */}
-            <div className="mt-2 flex items-center justify-between">
-              <p className="text-xs text-gray-500 font-medium truncate flex-1">{filename}</p>
-              <button
-                onClick={async () => {
-                  try {
-                    const fileUrl = getFileUrl(file_url);
-                    const response = await fetch(fileUrl);
-                    const blob = await response.blob();
-                    const downloadUrl = window.URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = downloadUrl;
-                    link.download = filename;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    window.URL.revokeObjectURL(downloadUrl);
-                  } catch (error) {
-                    console.error('Download failed:', error);
-                    window.open(getFileUrl(file_url), '_blank');
-                  }
-                }}
-                className="ml-2 p-1 text-gray-500 hover:text-green-600 transition-colors"
-                title="Download image"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </button>
             </div>
           </div>
         </div>
@@ -404,38 +389,6 @@ export default function MessageBubble({ message, isSelf, isTemp = false, onDelet
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-900 truncate">{filename}</p>
               <p className="text-xs text-gray-500 mt-1">{formatFileSize(size)}</p>
-            </div>
-            <div className="flex-shrink-0">
-              <button
-                onClick={async () => {
-                  try {
-                    // Fetch the file using the proper URL
-                    const fileUrl = getFileUrl(file_url);
-                    const response = await fetch(fileUrl);
-                    const blob = await response.blob();
-
-                    // Create download link
-                    const url = window.URL.createObjectURL(blob);
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.download = filename;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    window.URL.revokeObjectURL(url);
-                  } catch (error) {
-                    console.error('Download failed:', error);
-                    // Fallback to opening in new tab
-                    window.open(getFileUrl(file_url), '_blank');
-                  }
-                }}
-                className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-green-500 rounded-lg hover:bg-green-600 transition-colors duration-200"
-              >
-                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Download
-              </button>
             </div>
           </div>
         </div>
@@ -475,37 +428,76 @@ export default function MessageBubble({ message, isSelf, isTemp = false, onDelet
             onTouchEnd={handleTouchEnd}
             onTouchMove={handleTouchMove}
           >
-          {/* Action buttons for text messages */}
-          {message.message && !message.attachment && (
-            <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex space-x-1">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleCopy();
-                }}
-                className="p-1.5 bg-white bg-opacity-90 rounded-full shadow-sm hover:bg-opacity-100 transition-all"
-                title="Copy message"
+          {/* Three-dot menu button */}
+          <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowThreeDotMenu(!showThreeDotMenu);
+              }}
+              className="p-1.5 bg-white bg-opacity-90 rounded-full shadow-sm hover:bg-opacity-100 transition-all"
+              title="More options"
+            >
+              <svg className="w-3 h-3 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+              </svg>
+            </button>
+            
+            {/* Three-dot menu dropdown */}
+            {showThreeDotMenu && (
+              <div
+                ref={menuRef}
+                className="absolute right-0 top-8 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-32 z-50"
               >
-                <svg className="w-3 h-3 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-              </button>
-              {isSelf && onDelete && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowDeleteConfirm(true);
-                  }}
-                  className="p-1.5 bg-red-500 bg-opacity-90 rounded-full shadow-sm hover:bg-opacity-100 transition-all"
-                  title="Delete message"
-                >
-                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
-              )}
-            </div>
-          )}
+                {message.attachment && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowDownloadPrompt(true);
+                      setShowThreeDotMenu(false);
+                      setCustomFileName(message.attachment?.filename || '');
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span>Download</span>
+                  </button>
+                )}
+                {!message.attachment && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCopy();
+                      setShowThreeDotMenu(false);
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    <span>Copy</span>
+                  </button>
+                )}
+                {isSelf && onDelete && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowDeleteConfirm(true);
+                      setShowThreeDotMenu(false);
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    <span>Delete</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
 
           {message.message && (
             <div className="text-sm leading-relaxed font-medium">{message.message}</div>
@@ -604,6 +596,82 @@ export default function MessageBubble({ message, isSelf, isTemp = false, onDelet
                   className="flex-1 px-4 py-2 text-[var(--text-inverse)] bg-[var(--error)] rounded-lg hover:bg-red-700 transition-colors"
                 >
                   Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Download Prompt Modal */}
+        {showDownloadPrompt && message.attachment && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-[var(--secondary)] rounded-lg p-6 max-w-sm mx-4 shadow-lg">
+              <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Download File</h3>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
+                  File Name
+                </label>
+                <input
+                  type="text"
+                  value={customFileName}
+                  onChange={(e) => setCustomFileName(e.target.value)}
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 focus:border-[var(--accent)] bg-[var(--secondary)] text-[var(--text-primary)]"
+                  placeholder="Enter filename"
+                />
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
+                    setShowDownloadPrompt(false);
+                    setCustomFileName('');
+                  }}
+                  className="flex-1 px-4 py-2 text-[var(--text-primary)] bg-[var(--secondary-hover)] rounded-lg hover:bg-[var(--border)] transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      if (!message.attachment) return;
+                      
+                      const { file_url, filename } = message.attachment;
+                      const fileUrl = getFileUrl(file_url);
+                      console.log('Downloading file:', fileUrl);
+                      
+                      const response = await fetch(fileUrl);
+                      
+                      if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                      }
+                      
+                      const blob = await response.blob();
+                      const contentType = response.headers.get('content-type') || 'application/octet-stream';
+                      const typedBlob = new Blob([blob], { type: contentType });
+                      const sanitizedFilename = (customFileName || filename).replace(/[<>:"/\\|?*]/g, '_');
+                      
+                      const url = window.URL.createObjectURL(typedBlob);
+                      const link = document.createElement('a');
+                      link.href = url;
+                      link.download = sanitizedFilename;
+                      link.style.display = 'none';
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      
+                      setTimeout(() => {
+                        window.URL.revokeObjectURL(url);
+                      }, 100);
+                      
+                      setShowDownloadPrompt(false);
+                      setCustomFileName('');
+                    } catch (error) {
+                      console.error('Download failed:', error);
+                      alert('Failed to download file. Please try again.');
+                    }
+                  }}
+                  className="flex-1 px-4 py-2 text-[var(--text-inverse)] bg-[var(--accent)] rounded-lg hover:bg-[var(--accent-hover)] transition-colors"
+                >
+                  Download
                 </button>
               </div>
             </div>

@@ -76,6 +76,12 @@ instance.interceptors.response.use(
 export const getFileUrl = (filePath: string | undefined | null): string => {
   if (!filePath) return '';
   if (filePath.startsWith('http')) return filePath;
+  
+  // If the path already includes /files/, don't add it again
+  if (filePath.startsWith('/files/')) {
+    return `${API_URL}${filePath}`;
+  }
+  
   return `${API_URL}/files/${filePath}`;
 };
 

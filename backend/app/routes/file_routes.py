@@ -102,6 +102,9 @@ async def get_file(file_path: str):
     if file_path.startswith('uploads/'):
         file_path = file_path.replace('uploads/', '')
     
+    # Remove leading slash if present
+    file_path = file_path.lstrip('/')
+    
     full_path = os.path.join(UPLOAD_DIR, file_path)
     
     # Debug logging

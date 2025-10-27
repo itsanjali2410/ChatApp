@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import api from "../utils/api";
+import ThemeToggle from "./ThemeToggle";
 
 type User = {
   _id: string;
@@ -365,6 +366,17 @@ export default function SettingsModal({ isOpen, onClose, currentUser }: Settings
                 </button>
               </div>
 
+              {/* Theme Toggle */}
+              <div className="pt-6 border-t border-[var(--border)]">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-lg font-semibold text-[var(--text-primary)] mb-1">Appearance</h4>
+                    <p className="text-sm text-[var(--text-secondary)]">Switch between light and dark theme</p>
+                  </div>
+                  <ThemeToggle variant="button" size="md" />
+                </div>
+              </div>
+
               {/* Logout Button */}
               <div className="pt-6 border-t border-[var(--border)]">
                 <button
@@ -501,6 +513,17 @@ export default function SettingsModal({ isOpen, onClose, currentUser }: Settings
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+
+              {/* Theme Toggle in Admin Tab */}
+              <div className="pt-6 border-t border-[var(--border)]">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-lg font-semibold text-[var(--text-primary)] mb-1">Appearance</h4>
+                    <p className="text-sm text-[var(--text-secondary)]">Switch between light and dark theme</p>
+                  </div>
+                  <ThemeToggle variant="button" size="md" />
                 </div>
               </div>
             </div>
