@@ -83,6 +83,8 @@ export default function ChatPage() {
   const [unreadCounts, setUnreadCounts] = useState<{[chatId: string]: number}>({});
   const [lastReadTimestamps, setLastReadTimestamps] = useState<{[chatId: string]: string}>({});
   const [hiddenUnreadBadge, setHiddenUnreadBadge] = useState<{[chatId: string]: boolean}>({});
+  // Track last message status for each chat (for read receipts in sidebar)
+  const [lastMessageStatus, setLastMessageStatus] = useState<{[chatId: string]: {status: string, seen_at?: string}}>({});
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
   const [showPopupNotification, setShowPopupNotification] = useState(false);
   const [popupMessage, setPopupMessage] = useState<{sender: string, message: string} | null>(null);
@@ -374,6 +376,20 @@ export default function ChatPage() {
               : msg
           ));
         }
+        
+        // Update last message status for sidebar
+        setLastMessageStatus(prev => {
+          if (prev[data.chat_id]) {
+            return {
+              ...prev,
+              [data.chat_id]: {
+                ...prev[data.chat_id],
+                status: 'delivered'
+              }
+            };
+          }
+          return prev;
+        });
       } else if (data.type === "messages_read") {
         // Handle messages marked as read
         console.log("Messages read:", data);
@@ -384,6 +400,20 @@ export default function ChatPage() {
               : msg
           ));
         }
+        
+        // Update last message status for sidebar
+        setLastMessageStatus(prev => {
+          if (prev[data.chat_id]) {
+            return {
+              ...prev,
+              [data.chat_id]: {
+                status: 'read',
+                seen_at: data.seen_at
+              }
+            };
+          }
+          return prev;
+        });
       } else if (data.type === "message_status") {
         // Handle individual message status update
         console.log("Message status update:", data);
@@ -392,6 +422,21 @@ export default function ChatPage() {
             ? { ...msg, status: data.status }
             : msg
         ));
+        
+        // Update last message status if this is the last message
+        setLastMessageStatus(prev => {
+          const chatId = activeChat?.id;
+          if (chatId && prev[chatId]) {
+            return {
+              ...prev,
+              [chatId]: {
+                ...prev[chatId],
+                status: data.status
+              }
+            };
+          }
+          return prev;
+        });
       } else if (data.type === "user_status") {
         // Handle user online/offline status updates
         console.log("User status update:", data);
@@ -1037,6 +1082,15 @@ export default function ChatPage() {
           return timeA - timeB;
         });
       });
+      
+      // Track the last message status for this chat (for sidebar receipts)
+      setLastMessageStatus(prev => ({
+        ...prev,
+        [activeChat.id]: {
+          status: sentMessage.status || 'sent',
+          seen_at: sentMessage.seen_at
+        }
+      }));
       
       // Send via WebSocket for real-time delivery to others
       if (isConnected) {
@@ -1716,8 +1770,8 @@ export default function ChatPage() {
               <div
                 key={chat.id}
                 onClick={() => openGroupChat(chat)}
-                className={`flex items-center px-4 sm:px-6 py-3 sm:py-4 hover:bg-[var(--secondary-hover)] cursor-pointer border-b border-[var(--border)] transition-all duration-200 group ${
-                  activeChat?.id === chat.id ? 'bg-[var(--accent-light)] border-l-4 border-l-[var(--accent)]' : ''
+                className={`flex items-center px-4 sm:px-6 py-3 sm:py-4 cursor-pointer border-b border-[var(--border)] transition-all duration-200 group ${
+                  activeChat?.id === chat.id ? 'bg-gray-100 border-l-4 border-l-[var(--accent)]' : ''
                 }`}
               >
                 <div className="relative flex-shrink-0">
@@ -1848,8 +1902,8 @@ export default function ChatPage() {
               return (
                 <div
                   key={user._id}
-                   className={`flex items-center px-4 sm:px-6 py-3 sm:py-4 hover:bg-[var(--secondary-hover)] border-b border-[var(--border)] group transition-all duration-200 user-list-item ${
-                     activeChat?.id === userChat?.id ? 'bg-[var(--accent-light)] border-l-4 border-l-[var(--accent)]' : ''
+                   className={`flex items-center px-4 sm:px-6 py-3 sm:py-4 border-b border-[var(--border)] group transition-all duration-200 user-list-item ${
+                     activeChat?.id === userChat?.id ? 'bg-gray-100 border-l-4 border-l-[var(--accent)]' : ''
                   }`}
                 >
                   <div className="relative flex-shrink-0">
@@ -1906,22 +1960,57 @@ export default function ChatPage() {
                        </div>
                     </div>
                     <div className="flex items-center justify-between mt-1 gap-2">
-                       <p className="text-xs text-[var(--text-secondary)] truncate">
-                        {user.is_typing ? (
-                           <span className="text-[var(--accent)] italic">typing...</span>
-                        ) : (
-                          <span className="text-[var(--text-secondary)]">
-                             {userChat ? (lastMessages[userChat.id] || "Hey there! I am using ChatApp.") : "Start chatting"}
-                          </span>
-                        )}
-                      </p>
-                      <div className="flex items-center space-x-1.5 sm:space-x-2">
+                       <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <p className="text-xs text-[var(--text-secondary)] truncate">
+                          {user.is_typing ? (
+                             <span className="text-[var(--accent)] italic">typing...</span>
+                          ) : (
+                            <span className="text-[var(--text-secondary)]">
+                               {userChat ? (lastMessages[userChat.id] || "Hey there! I am using ChatApp.") : "Start chatting"}
+                            </span>
+                          )}
+                        </p>
+                        
+                        {/* Read receipt icons - always show for last sent message */}
+                        {userChat && lastMessages[userChat.id] && (() => {
+                          // Use stored last message status for this chat
+                          const status = lastMessageStatus[userChat.id];
+                          
+                          // Only show if last message is from current user
+                          const chatMessages = messages.filter(m => m.chat_id === userChat.id);
+                          if (chatMessages.length === 0) return null;
+                          const lastMsg = chatMessages[chatMessages.length - 1];
+                          if (lastMsg.sender_id !== myId) return null;
+                          
+                          // Show based on status
+                          if (status?.status === 'read' || status?.seen_at) {
+                            return (
+                              <div className="flex items-center flex-shrink-0">
+                                <svg className="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                                  <path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" />
+                                  <path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fillRule="evenodd" transform="translate(0, -1)" />
+                                </svg>
+                              </div>
+                            );
+                          } else if (status?.status === 'delivered' || status?.status === 'sent') {
+                            return (
+                              <div className="flex items-center flex-shrink-0">
+                                <svg className="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                                  <path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" />
+                                  <path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fillRule="evenodd" transform="translate(0, -1)" />
+                                </svg>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+                        
+                        {/* Unread count badge */}
                         {userChat && (() => {
                           const shouldShow = unreadCounts[userChat.id] > 0 && !hiddenUnreadBadge[userChat.id];
                           if (shouldShow) {
-                            console.log("👤 User chat badge - Chat:", userChat.id, "Count:", unreadCounts[userChat.id], "Hidden:", hiddenUnreadBadge[userChat.id]);
                             return (
-                              <div className="bg-[var(--accent)] text-[var(--text-inverse)] text-xs font-bold rounded-full min-w-[18px] sm:min-w-[20px] h-4 sm:h-5 flex items-center justify-center px-1.5 sm:px-2">
+                              <div className="bg-[var(--accent)] text-[var(--text-inverse)] text-xs font-bold rounded-full min-w-[18px] sm:min-w-[20px] h-4 sm:h-5 flex items-center justify-center px-1.5 sm:px-2 flex-shrink-0">
                                 {unreadCounts[userChat.id] > 99 ? '99+' : unreadCounts[userChat.id]}
                               </div>
                             );
@@ -1948,10 +2037,14 @@ export default function ChatPage() {
                 {/* Mobile Back Button */}
                 <button 
                   className="lg:hidden text-[var(--text-secondary)] hover:text-[var(--accent)] p-2 rounded-lg hover:bg-[var(--secondary-hover)] transition-all duration-200"
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log("🔙 Back button clicked - Closing chat");
                     setActiveChat(null);
                     setShowSidebar(true);
                   }}
+                  title="Back to chat list"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -1967,10 +2060,11 @@ export default function ChatPage() {
                       </svg>
                     </div>
                   ) : (
-                     <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-500 rounded-full flex items-center justify-center">
-                       <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      </svg>
+                     <div className="w-8 h-8 sm:w-10 sm:h-10 bg-[var(--accent)] rounded-full flex items-center justify-center text-[var(--text-inverse)] font-bold text-xs sm:text-sm">
+                       {(() => {
+                         const otherUser = users.find(u => activeChat.participants.includes(u._id) && u._id !== myId);
+                         return getInitials(otherUser || {} as User);
+                       })()}
                     </div>
                   )}
                 </div>
@@ -1988,7 +2082,11 @@ export default function ChatPage() {
                   <p className="text-xs sm:text-sm text-[var(--text-secondary)]">
                     {activeChat.type === "group" 
                       ? `${activeChat.participants.length} members`
-                      : formatLastSeen(users.find(u => activeChat.participants.includes(u._id) && u._id !== myId))
+                      : (() => {
+                          const otherUser = users.find(u => activeChat.participants.includes(u._id) && u._id !== myId);
+                          if (otherUser?.is_online) return "online";
+                          return "tap to message";
+                        })()
                     }
                   </p>
                 </div>
