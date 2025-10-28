@@ -7,7 +7,7 @@ import { useWebSocket } from "../../hooks/useWebSocket";
 import { notificationService } from "../../utils/notificationService";
 import FileUpload from "../../components/FileUpload";
 import MessageBubble from "../../components/MessageBubble";
-import OnlineUsers from "../../components/OnlineUsers";
+// import OnlineUsers from "../../components/OnlineUsers";
 import GroupManagementModal from "../../components/GroupManagementModal";
 import ThemeToggle from "../../components/ThemeToggle";
 
@@ -119,7 +119,12 @@ export default function ChatPage() {
     return () => window.removeEventListener('resize', updateSidebarForViewport);
   }, []);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Refs to avoid stale closures inside WebSocket callbacks
+  const activeChatRef = useRef<Chat | null>(null);
+  const usersRef = useRef<User[]>([]);
+  const myIdRef = useRef<string>("");
   const myId = typeof window !== "undefined" ? localStorage.getItem("user_id") || "" : "";
+  myIdRef.current = myId;
   const orgId = typeof window !== "undefined" ? localStorage.getItem("org_id") || "" : "";
   
   // Debug logging
@@ -130,6 +135,15 @@ export default function ChatPage() {
   console.log("Admin users:", users.filter(user => user.role === 'admin'));
   console.log("Regular users:", users.filter(user => user.role === 'user' || !user.role));
 
+  // Keep refs in sync with state
+  useEffect(() => {
+    activeChatRef.current = activeChat;
+  }, [activeChat]);
+
+  useEffect(() => {
+    usersRef.current = users;
+  }, [users]);
+
   // WebSocket connection
   const { isConnected, sendMessage: sendWSMessage } = useWebSocket({
     url: `/ws/${myId}`,
@@ -138,6 +152,10 @@ export default function ChatPage() {
       console.log("WebSocket message received:", data);
       
       if (data.type === "new_message") {
+        console.log("Processing new_message:", data);
+        console.log("Current messages count:", messages.length);
+        console.log("Active chat (ref):", activeChatRef.current?.id);
+        console.log("Message sender:", data.sender_id, "My ID:", myIdRef.current);
         const newMessage: Message = {
           id: data.id || `ws-${Date.now()}`,
           chat_id: data.chat_id,
@@ -151,8 +169,13 @@ export default function ChatPage() {
           seen_by: data.seen_by
         };
         setMessages(prev => {
-          // Check if message already exists to avoid duplicates
-          const exists = prev.some(msg => msg.id === newMessage.id);
+          // Check if message already exists by ID, timestamp, and content to avoid duplicates
+          const exists = prev.some(msg => 
+            msg.id === newMessage.id || 
+            (msg.sender_id === newMessage.sender_id && 
+             msg.timestamp === newMessage.timestamp && 
+             msg.message === newMessage.message)
+          );
           if (exists) return prev;
           
           const updatedMessages = [...prev, newMessage];
@@ -177,7 +200,7 @@ export default function ChatPage() {
         }));
 
         // Update unread count if message is not from current user and chat is not active
-        if (data.sender_id !== myId && activeChat?.id !== data.chat_id) {
+        if (data.sender_id !== myIdRef.current && activeChatRef.current?.id !== data.chat_id) {
           setUnreadCounts(prev => ({
             ...prev,
             [data.chat_id]: (prev[data.chat_id] || 0) + 1
@@ -185,7 +208,7 @@ export default function ChatPage() {
         }
 
         // Update users list to move sender to top (real-time sorting)
-        if (data.sender_id !== myId) {
+        if (data.sender_id !== myIdRef.current) {
           setUsers(prev => {
             const senderIndex = prev.findIndex(u => u._id === data.sender_id);
             if (senderIndex > 0) {
@@ -202,8 +225,8 @@ export default function ChatPage() {
         // Update chats list - no need to manually reorder, sorting happens in render
 
         // Show notification if message is not from current user
-        if (data.sender_id !== myId) {
-          const sender = users.find(u => u._id === data.sender_id);
+        if (data.sender_id !== myIdRef.current) {
+          const sender = usersRef.current.find(u => u._id === data.sender_id);
           const senderName = sender ? getDisplayName(sender) : 'Unknown User';
           
           // Mark messages as delivered when received
@@ -499,15 +522,17 @@ export default function ChatPage() {
     };
   }, []);
 
-  // Real-time polling for messages
+  // Load messages when active chat changes - only once on mount
   useEffect(() => {
-    if (!activeChat) return;
+    if (!activeChat) {
+      setMessages([]);
+      return;
+    }
     
-    const pollMessages = async () => {
+    const loadMessages = async () => {
       try {
         const msgs = await api.get(`/messages/chat/${activeChat.id}`);
-        console.log("Polled messages:", msgs.data);
-        console.log("First message timestamp:", msgs.data[0]?.timestamp);
+        console.log("Loaded messages for chat:", activeChat.id, "Count:", msgs.data.length);
         
         // Sort messages by timestamp to ensure correct order
         const sortedMessages = msgs.data.sort((a: any, b: any) => {
@@ -527,14 +552,12 @@ export default function ChatPage() {
           }));
         }
       } catch (e) {
-        console.error("Failed to poll messages:", e);
+        console.error("Failed to load messages:", e);
       }
     };
     
-    pollMessages();
-    const interval = setInterval(pollMessages, 2000);
-    return () => clearInterval(interval);
-  }, [activeChat]);
+    loadMessages();
+  }, [activeChat?.id]); // Only reload when chat ID changes
 
   // Scroll to bottom when a new chat is opened
   useEffect(() => {
@@ -841,21 +864,69 @@ export default function ChatPage() {
       return;
     }
 
+    const messageText = newMessage.trim();
     const messageData = {
       chat_id: activeChat.id,
-      message: newMessage.trim(),
+      message: messageText,
       message_type: "text"
     };
 
     console.log("Sending message data:", messageData);
 
+    // Create optimistic message immediately
+    const tempId = `temp-${Date.now()}`;
+    const optimisticMessage: Message = {
+      id: tempId,
+      chat_id: activeChat.id,
+      sender_id: myId!,
+      message: messageText,
+      timestamp: new Date().toISOString(),
+      message_type: "text",
+      status: "sent"
+    };
+
+    // Add optimistic message to UI immediately (appears instantly)
+    setMessages(prev => {
+      const updatedMessages = [...prev, optimisticMessage];
+      return updatedMessages.sort((a, b) => {
+        const timeA = new Date(a.timestamp).getTime();
+        const timeB = new Date(b.timestamp).getTime();
+        return timeA - timeB;
+      });
+    });
+
+    // Update last message immediately
+    setLastMessages(prev => ({
+      ...prev,
+      [activeChat.id]: messageText
+    }));
+
+    // Update last message timestamp
+    setLastMessageTimestamps(prev => ({
+      ...prev,
+      [activeChat.id]: optimisticMessage.timestamp
+    }));
+
+    setNewMessage(""); // Clear input immediately
+
+    // Stop typing indicator
+    if (isConnected) {
+      sendWSMessage({
+        type: "typing",
+        chat_id: activeChat.id,
+        is_typing: false
+      });
+    }
+    setIsTyping(false);
+
     try {
       const response = await api.post("/messages/send", messageData);
       const sentMessage = response.data;
       
-      // Add to local messages immediately and sort
+      // Replace optimistic message with real message from server
       setMessages(prev => {
-        const updatedMessages = [...prev, sentMessage];
+        const filtered = prev.filter(msg => msg.id !== tempId);
+        const updatedMessages = [...filtered, sentMessage];
         return updatedMessages.sort((a, b) => {
           const timeA = new Date(a.timestamp).getTime();
           const timeB = new Date(b.timestamp).getTime();
@@ -863,47 +934,31 @@ export default function ChatPage() {
         });
       });
       
-      // Update last message for this chat
-      setLastMessages(prev => ({
-        ...prev,
-        [activeChat.id]: newMessage.trim()
-      }));
-      
-      // Send via WebSocket for real-time delivery
+      // Send via WebSocket for real-time delivery to others
       if (isConnected) {
-         sendWSMessage({
+        sendWSMessage({
           type: "message",
           chat_id: activeChat.id,
-          message: newMessage.trim(),
+          message: messageText,
           timestamp: sentMessage.timestamp
-         });
+        });
       }
-      
-      setNewMessage("");
-      
-      // Stop typing indicator
-      if (isConnected) {
-         sendWSMessage({
-          type: "typing",
-          chat_id: activeChat.id,
-          is_typing: false
-         });
-      }
-      setIsTyping(false);
       
     } catch (e: any) {
       console.error("Error sending message:", e);
       
+      // Remove optimistic message on error
+      setMessages(prev => prev.filter(msg => msg.id !== tempId));
+      
       if (e?.response?.status === 401) {
         setError("Your session has expired. Please log in again.");
-        // Clear localStorage and redirect to login
         localStorage.clear();
         setTimeout(() => {
           window.location.href = "/login";
         }, 2000);
       } else {
-      const detail = e?.response?.data?.detail || "Failed to send message";
-      setError(detail);
+        const detail = e?.response?.data?.detail || "Failed to send message";
+        setError(detail);
       }
     }
   };
