@@ -7,6 +7,8 @@ import { useWebSocket } from "../../hooks/useWebSocket";
 import { notificationService } from "../../utils/notificationService";
 import FileUpload from "../../components/FileUpload";
 import MessageBubble from "../../components/MessageBubble";
+import { requestNotificationPermissionAndToken, onForegroundMessage, saveFCMTokenToBackend } from "../../utils/firebase";
+
 // import OnlineUsers from "../../components/OnlineUsers";
 import GroupManagementModal from "../../components/GroupManagementModal";
 import ThemeToggle from "../../components/ThemeToggle";
@@ -80,6 +82,7 @@ export default function ChatPage() {
   const [lastMessageTimestamps, setLastMessageTimestamps] = useState<{[chatId: string]: string}>({});
   const [unreadCounts, setUnreadCounts] = useState<{[chatId: string]: number}>({});
   const [lastReadTimestamps, setLastReadTimestamps] = useState<{[chatId: string]: string}>({});
+  const [hiddenUnreadBadge, setHiddenUnreadBadge] = useState<{[chatId: string]: boolean}>({});
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
   const [showPopupNotification, setShowPopupNotification] = useState(false);
   const [popupMessage, setPopupMessage] = useState<{sender: string, message: string} | null>(null);
@@ -90,7 +93,24 @@ export default function ChatPage() {
   
   // Mobile view state - track if we're showing chat or sidebar on mobile
   const [isMobileView, setIsMobileView] = useState(false);
-  
+  useEffect(() => {
+    // Request FCM token
+    if (notificationPermission === 'granted') {
+      requestNotificationPermissionAndToken().then((token) => {
+        if (token) {
+          console.log("FCM Token obtained:", token);
+          // Save token to backend
+          saveFCMTokenToBackend(token);
+        }
+      });
+    }
+    
+    // Listen for foreground messages
+    onForegroundMessage((payload) => {
+      console.log("Foreground message:", payload);
+      // Handle the message display
+    });
+  }, [notificationPermission]);
   // Detect screen size changes
   useEffect(() => {
     const checkScreenSize = () => {
@@ -123,6 +143,8 @@ export default function ChatPage() {
   const activeChatRef = useRef<Chat | null>(null);
   const usersRef = useRef<User[]>([]);
   const myIdRef = useRef<string>("");
+  const hiddenUnreadBadgeRef = useRef<{[chatId: string]: boolean}>({});
+  const unreadCountsRef = useRef<{[chatId: string]: number}>({});
   const myId = typeof window !== "undefined" ? localStorage.getItem("user_id") || "" : "";
   myIdRef.current = myId;
   const orgId = typeof window !== "undefined" ? localStorage.getItem("org_id") || "" : "";
@@ -143,6 +165,21 @@ export default function ChatPage() {
   useEffect(() => {
     usersRef.current = users;
   }, [users]);
+  
+  // Add chats ref to access in WebSocket handler
+  const chatsRef = useRef<Chat[]>([]);
+  useEffect(() => {
+    chatsRef.current = chats;
+  }, [chats]);
+  
+  // Keep unread badge and count refs in sync
+  useEffect(() => {
+    hiddenUnreadBadgeRef.current = hiddenUnreadBadge;
+  }, [hiddenUnreadBadge]);
+  
+  useEffect(() => {
+    unreadCountsRef.current = unreadCounts;
+  }, [unreadCounts]);
 
   // WebSocket connection
   const { isConnected, sendMessage: sendWSMessage } = useWebSocket({
@@ -187,13 +224,25 @@ export default function ChatPage() {
           });
         });
         
-        // Update last message for this chat with timestamp
+        // Update last message for this chat with timestamp (for both user and group chats)
+        // For group chats, include sender name in the preview
+        const sender = usersRef.current.find(u => u._id === data.sender_id);
+        const senderName = sender ? getDisplayName(sender) : '';
+        
+        // Check if this is a group chat by looking at the chats array
+        const chat = chatsRef.current.find(c => c.id === data.chat_id);
+        const isGroupChat = chat && chat.type === 'group';
+        
+        const messagePreview = isGroupChat && senderName
+          ? `${senderName}: ${data.message}`
+          : data.message;
+        
         setLastMessages(prev => ({
           ...prev,
-          [data.chat_id]: data.message
+          [data.chat_id]: messagePreview
         }));
         
-        // Update last message timestamp for sorting
+        // Update last message timestamp for sorting (this triggers sidebar update)
         setLastMessageTimestamps(prev => ({
           ...prev,
           [data.chat_id]: data.timestamp || new Date().toISOString()
@@ -201,9 +250,16 @@ export default function ChatPage() {
 
         // Update unread count if message is not from current user and chat is not active
         if (data.sender_id !== myIdRef.current && activeChatRef.current?.id !== data.chat_id) {
+          // Always increment unread count for messages from others
           setUnreadCounts(prev => ({
             ...prev,
             [data.chat_id]: (prev[data.chat_id] || 0) + 1
+          }));
+          
+          // Make badge visible for new unread messages
+          setHiddenUnreadBadge(prev => ({
+            ...prev,
+            [data.chat_id]: false
           }));
         }
 
@@ -633,25 +689,29 @@ export default function ChatPage() {
            userRole.includes(searchLower);
   });
 
-  // Mark messages as read when chat is opened
+  // When chat is opened, hide the unread badge and reset count to 0
   const markChatAsRead = async (chatId: string) => {
+    // Hide the badge (don't show it even if new messages arrive)
+    setHiddenUnreadBadge(prev => ({
+      ...prev,
+      [chatId]: true
+    }));
+    
+    // Reset unread count to 0
     setUnreadCounts(prev => ({
       ...prev,
       [chatId]: 0
     }));
+    
+    // Save the last read timestamp
     setLastReadTimestamps(prev => ({
       ...prev,
       [chatId]: new Date().toISOString()
     }));
     
-    // Mark messages as read via API
     try {
       await markMessagesAsRead(chatId);
-      // Also send via WebSocket for real-time updates
-      sendWSMessage({
-        type: "mark_read",
-        chat_id: chatId
-      });
+      sendWSMessage({ type: "mark_read", chat_id: chatId });
     } catch (error) {
       console.error("Error marking messages as read:", error);
     }
@@ -896,9 +956,13 @@ export default function ChatPage() {
     });
 
     // Update last message immediately
+    // For group chats, show "You: message" format
+    const currentUserName = currentUser?.first_name || currentUser?.username || 'You';
+    const previewText = activeChat.type === 'group' ? `${currentUserName}: ${messageText}` : messageText;
+    
     setLastMessages(prev => ({
       ...prev,
-      [activeChat.id]: messageText
+      [activeChat.id]: previewText
     }));
 
     // Update last message timestamp
@@ -1203,10 +1267,18 @@ export default function ChatPage() {
           
           .chat-header {
             padding: 0.75rem 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background: var(--secondary);
           }
           
           .message-input {
             padding: 0.75rem 1rem;
+            position: sticky;
+            bottom: 0;
+            z-index: 50;
+            background: var(--secondary);
           }
           
           .user-list-item {
@@ -1295,7 +1367,18 @@ export default function ChatPage() {
         .chat-input-container {
           position: sticky;
           bottom: 0;
-          z-index: 10;
+          z-index: 50;
+          background: var(--secondary);
+        }
+        
+        /* Ensure chat header stays visible on mobile */
+        @media (max-width: 1023px) {
+          .chat-header {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background: var(--secondary);
+          }
         }
         
         /* Responsive text sizes */
@@ -1605,18 +1688,23 @@ export default function ChatPage() {
                   </div>
                 </div>
                 <div className="ml-4 flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <p className="text-base font-semibold text-[var(--text-primary)] truncate">
                       {chat.group_name}
                     </p>
-                    <p className="text-xs text-[var(--text-secondary)] font-medium">
+                    <p className="text-xs text-[var(--text-secondary)] font-medium whitespace-nowrap flex-shrink-0">
                       {(() => {
-                        // Find the most recent message for this chat
+                        // Use lastMessageTimestamps for real-time updates
+                        const chatTimestamp = lastMessageTimestamps[chat.id];
+                        if (chatTimestamp) {
+                          return formatTimestamp(chatTimestamp);
+                        }
+                        // Fallback: try to find from messages
                         const chatMessages = messages.filter(m => m.chat_id === chat.id);
                         if (chatMessages.length > 0) {
                           const lastMessage = chatMessages[chatMessages.length - 1];
                           if (lastMessage && lastMessage.timestamp) {
-                          return formatTimestamp(lastMessage.timestamp);
+                            return formatTimestamp(lastMessage.timestamp);
                           }
                         }
                         return new Date().toLocaleTimeString('en-IN', { 
@@ -1627,12 +1715,12 @@ export default function ChatPage() {
                       })()}
                     </p>
                   </div>
-                  <div className="flex items-center justify-between mt-2">
-                    <p className="text-sm text-[var(--text-secondary)] truncate font-medium">
+                  <div className="flex items-center justify-between mt-1 gap-2">
+                    <p className="text-sm text-[var(--text-secondary)] truncate">
                       {lastMessages[chat.id] || `${chat.participants.length} members`}
                     </p>
-                    {unreadCounts[chat.id] > 0 && (
-                      <div className="bg-[var(--accent)] text-[var(--text-inverse)] text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-2">
+                    {unreadCounts[chat.id] > 0 && !hiddenUnreadBadge[chat.id] && (
+                      <div className="bg-[var(--accent)] text-[var(--text-inverse)] text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-2 flex-shrink-0">
                         {unreadCounts[chat.id] > 99 ? '99+' : unreadCounts[chat.id]}
                       </div>
                     )}
@@ -1741,32 +1829,38 @@ export default function ChatPage() {
                      className="ml-3 sm:ml-4 flex-1 min-w-0 cursor-pointer"
                      onClick={() => openDirectChat(user._id)}
                    >
-                    <div className="flex items-center justify-between">
-                       <div className="flex items-center space-x-1.5 sm:space-x-2">
+                    <div className="flex items-center justify-between gap-2">
+                       <div className="flex items-center space-x-1.5 sm:space-x-2 min-w-0">
                          <p className="text-sm sm:text-base font-semibold text-[var(--text-primary)] truncate">
                         {getDisplayName(user)}
                       </p>
                          {user.role === 'admin' && (
-                           <span className="inline-flex items-center px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-lg text-xs font-semibold bg-[var(--accent)] text-[var(--text-inverse)]">
+                           <span className="inline-flex items-center px-1.5 sm:px-2.5 py-0.5 sm:py-1 rounded-lg text-xs font-semibold bg-[var(--accent)] text-[var(--text-inverse)] flex-shrink-0">
                              Admin
                            </span>
                          )}
                        </div>
-                       <div className="flex items-center space-x-1.5 sm:space-x-2">
-                         <p className="text-xs text-[var(--text-secondary)] font-medium">
-                          {(() => {
-                            if (userChat) {
-                              const chatMessages = messages.filter(m => m.chat_id === userChat.id);
-                              if (chatMessages.length > 0) {
-                                const lastMessage = chatMessages[chatMessages.length - 1];
-                                if (lastMessage && lastMessage.timestamp) {
-                            return formatTimestamp(lastMessage.timestamp);
-                          }
-                               }
-                             }
-                             
-                          })()}
-                        </p>
+                       <div className="flex items-center gap-1">
+                         <p className="text-xs text-[var(--text-secondary)] font-medium whitespace-nowrap flex-shrink-0">
+                            {(() => {
+                              if (userChat) {
+                                // Use lastMessageTimestamps for real-time updates
+                                const chatTimestamp = lastMessageTimestamps[userChat.id];
+                                if (chatTimestamp) {
+                                  return formatTimestamp(chatTimestamp);
+                                }
+                                // Fallback: try to find from messages
+                                const chatMessages = messages.filter(m => m.chat_id === userChat.id);
+                                if (chatMessages.length > 0) {
+                                  const lastMessage = chatMessages[chatMessages.length - 1];
+                                  if (lastMessage && lastMessage.timestamp) {
+                                    return formatTimestamp(lastMessage.timestamp);
+                                  }
+                                }
+                              }
+                              return "";
+                            })()}
+                          </p>
                          {userChat && (
                            <button
                              onClick={(e) => {
@@ -1785,7 +1879,7 @@ export default function ChatPage() {
                          )}
                        </div>
                     </div>
-                    <div className="flex items-center justify-between mt-1">
+                    <div className="flex items-center justify-between mt-1 gap-2">
                        <p className="text-xs text-[var(--text-secondary)] truncate">
                         {user.is_typing ? (
                            <span className="text-[var(--accent)] italic">typing...</span>
@@ -1796,7 +1890,7 @@ export default function ChatPage() {
                         )}
                       </p>
                       <div className="flex items-center space-x-1.5 sm:space-x-2">
-                        {userChat && unreadCounts[userChat.id] > 0 && (
+                        {userChat && unreadCounts[userChat.id] > 0 && !hiddenUnreadBadge[userChat.id] && (
                           <div className="bg-[var(--accent)] text-[var(--text-inverse)] text-xs font-bold rounded-full min-w-[18px] sm:min-w-[20px] h-4 sm:h-5 flex items-center justify-center px-1.5 sm:px-2">
                             {unreadCounts[userChat.id] > 99 ? '99+' : unreadCounts[userChat.id]}
                           </div>
@@ -1816,7 +1910,7 @@ export default function ChatPage() {
           {activeChat ? (
           <>
             {/* Chat Header */}
-            <div className="bg-[var(--secondary)] px-4 sm:px-6 py-3 sm:py-4 border-b border-[var(--border)] flex items-center justify-between flex-shrink-0 shadow-sm chat-header">
+            <div className="bg-[var(--secondary)] px-4 sm:px-6 py-3 sm:py-4 border-b border-[var(--border)] flex items-center justify-between flex-shrink-0 shadow-sm chat-header sticky top-0 z-40">
               <div className="flex items-center space-x-2 sm:space-x-3">
                 {/* Mobile Back Button */}
                 <button 

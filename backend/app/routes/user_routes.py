@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from werkzeug.security import generate_password_hash
 from ..models.user_model import User
+from ..services.user_service import users_collection
 from ..services import user_service
 from ..services import org_service
 from ..dependencies.auth import get_current_user, get_current_admin
@@ -115,6 +116,34 @@ def set_user_offline(current_user=Depends(get_current_user)):
         if result.matched_count == 0:
             raise HTTPException(status_code=404, detail="User not found")
     return {"message": "User set to offline"}
+
+# Save FCM token for push notifications
+@router.post("/save-fcm-token")
+def save_fcm_token(token_data: dict, current_user=Depends(get_current_user)):
+    """Save FCM token for push notifications"""
+    fcm_token = token_data.get("token")
+    user_email = current_user.get("sub")
+    user_role = current_user.get("role")
+    
+    if not fcm_token:
+        raise HTTPException(status_code=400, detail="FCM token is required")
+    
+    if not user_email:
+        raise HTTPException(status_code=400, detail="User email not found in token")
+    
+    # Update user document with FCM token
+    if user_role == "admin":
+        from ..services.admin_service import get_admin_by_email, update_admin
+        admin = get_admin_by_email(user_email)
+        if not admin:
+            raise HTTPException(status_code=404, detail="Admin not found")
+        update_admin(str(admin["_id"]), {"fcm_token": fcm_token})
+    else:
+        result = user_service.update_user(user_email, {"fcm_token": fcm_token})
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"success": True, "message": "FCM token saved successfully"}
 
 # Users in same organization (requires auth) 
 @router.get("/by_org")
@@ -284,3 +313,17 @@ def admin_delete_user(email: str, current_admin=Depends(get_current_admin)):
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
     return {"message": "User deleted"}
+
+@router.post("/save-fcm-token")
+async def save_fcm_token(token_data: dict, current_user=Depends(get_current_user)):
+    """Save FCM token for push notifications"""
+    fcm_token = token_data.get("token")
+    user_id = current_user.get("sub")
+    
+    # Update user document with FCM token
+    users_collection.update_one(
+        {"_id": user_id},
+        {"$set": {"fcm_token": fcm_token}}
+    )
+    
+    return {"success": True, "message": "FCM token saved"}
