@@ -219,25 +219,32 @@ export default function ChatPage() {
           seen_at: data.seen_at,
           seen_by: data.seen_by
         };
-        setMessages(prev => {
-          // Check if message already exists by ID, timestamp, and content to avoid duplicates
-          const exists = prev.some(msg => 
-            msg.id === newMessage.id || 
-            (msg.sender_id === newMessage.sender_id && 
-             msg.timestamp === newMessage.timestamp && 
-             msg.message === newMessage.message)
-          );
-          if (exists) return prev;
-          
-          const updatedMessages = [...prev, newMessage];
-          console.log("✅ Message added to state, new count:", updatedMessages.length);
-          // Sort messages by timestamp to maintain correct order
-          return updatedMessages.sort((a, b) => {
-            const timeA = new Date(a.timestamp).getTime();
-            const timeB = new Date(b.timestamp).getTime();
-            return timeA - timeB;
+        
+        // Only add message if this chat is currently active
+        if (activeChatRef.current?.id === data.chat_id) {
+          console.log("📥 Message is for active chat, adding to UI");
+          setMessages(prev => {
+            // Check if message already exists by ID, timestamp, and content to avoid duplicates
+            const exists = prev.some(msg => 
+              msg.id === newMessage.id || 
+              (msg.sender_id === newMessage.sender_id && 
+               msg.timestamp === newMessage.timestamp && 
+               msg.message === newMessage.message)
+            );
+            if (exists) return prev;
+            
+            const updatedMessages = [...prev, newMessage];
+            console.log("✅ Message added to state, new count:", updatedMessages.length);
+            // Sort messages by timestamp to maintain correct order
+            return updatedMessages.sort((a, b) => {
+              const timeA = new Date(a.timestamp).getTime();
+              const timeB = new Date(b.timestamp).getTime();
+              return timeA - timeB;
+            });
           });
-        });
+        } else {
+          console.log("📬 Message is for different chat, updating sidebar only");
+        }
         
         // Update last message for this chat with timestamp (for both user and group chats)
         // For group chats, include sender name in the preview
@@ -311,6 +318,13 @@ export default function ChatPage() {
           const sender = usersRef.current.find(u => u._id === data.sender_id);
           const senderName = sender ? getDisplayName(sender) : 'Unknown User';
           
+          // Get chat to determine if it's a group chat
+          const chat = chatsRef.current.find(c => c.id === data.chat_id);
+          const isGroupChat = chat && chat.type === 'group';
+          const chatName = isGroupChat ? (chat.group_name || 'Group Chat') : senderName;
+          
+          console.log("📢 Showing notification for chat:", data.chat_id, "Is group:", isGroupChat, "Chat name:", chatName);
+          
           // Mark messages as delivered when received
           try {
             await markMessagesAsDelivered(data.chat_id);
@@ -330,7 +344,7 @@ export default function ChatPage() {
           
           // Show popup notification
           setPopupMessage({
-            sender: senderName,
+            sender: chatName,
             message: data.message_type === 'file' ? `📎 ${data.message}` : data.message
           });
           setShowPopupNotification(true);
@@ -343,9 +357,9 @@ export default function ChatPage() {
           
           // Show browser notification
           if (data.message_type === 'file') {
-            notificationService.showFileNotification(senderName, data.message, data.chat_id);
+            notificationService.showFileNotification(chatName, data.message, data.chat_id);
           } else {
-            notificationService.showMessageNotification(senderName, data.message, data.chat_id);
+            notificationService.showMessageNotification(chatName, data.message, data.chat_id);
           }
         }
       } else if (data.type === "typing") {
