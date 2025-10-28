@@ -8,7 +8,6 @@ import { notificationService } from "../../utils/notificationService";
 import FileUpload from "../../components/FileUpload";
 import MessageBubble from "../../components/MessageBubble";
 import OnlineUsers from "../../components/OnlineUsers";
-import SettingsModal from "../../components/SettingsModal";
 import GroupManagementModal from "../../components/GroupManagementModal";
 import ThemeToggle from "../../components/ThemeToggle";
 
