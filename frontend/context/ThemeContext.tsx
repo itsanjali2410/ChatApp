@@ -21,10 +21,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMounted(true);
     
-    // Get theme from localStorage or use system preference
+    // Get theme from localStorage, default to light
     const savedTheme = localStorage.getItem('theme') as Theme | null;
     if (savedTheme) {
       setThemeState(savedTheme);
+    } else {
+      // Default to light theme if no saved preference
+      setThemeState('light');
     }
   }, []);
 
@@ -41,16 +44,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     let resolvedTheme: 'light' | 'dark';
     
     if (theme === 'system') {
-      resolvedTheme = getSystemTheme();
-      // Listen for system theme changes
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const handler = (e: MediaQueryListEvent) => {
-        setActualTheme(e.matches ? 'dark' : 'light');
-        applyTheme(e.matches ? 'dark' : 'light');
-      };
-      mediaQuery.addEventListener('change', handler);
-      setActualTheme(resolvedTheme);
-      return () => mediaQuery.removeEventListener('change', handler);
+      // For system theme, we'll default to light to avoid unwanted dark mode
+      resolvedTheme = 'light';
+      
+      // Optional: Uncomment to enable system theme detection
+      // resolvedTheme = getSystemTheme();
+      // const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      // const handler = (e: MediaQueryListEvent) => {
+      //   setActualTheme(e.matches ? 'dark' : 'light');
+      //   applyTheme(e.matches ? 'dark' : 'light');
+      // };
+      // mediaQuery.addEventListener('change', handler);
+      // setActualTheme(resolvedTheme);
+      // return () => mediaQuery.removeEventListener('change', handler);
     } else {
       resolvedTheme = theme;
     }

@@ -31,6 +31,10 @@
       "url": "/chat",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
-  ]
+  ],
+  "permissions": [
+    "notifications"
+  ],
+  "gcm_sender_id": "103953800507"
 }
 

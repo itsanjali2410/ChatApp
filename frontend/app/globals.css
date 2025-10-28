@@ -289,7 +289,7 @@ button, a {
   }
 }
 
-/* Dark mode support */
+/* Dark mode support - User can toggle to this */
 .dark {
   --background: #0f172a;
   --foreground: #1e293b;

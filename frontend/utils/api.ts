@@ -38,9 +38,15 @@ instance.interceptors.request.use((config) => {
     // Check if token is valid before making the request
     if (!isTokenValid(token)) {
       console.log("Token is invalid or expired, clearing localStorage");
+      // Don't immediately redirect on request interceptor
+      // Let the response interceptor handle it
       if (typeof window !== "undefined") {
-        localStorage.clear();
-        window.location.href = "/login";
+        const currentPath = window.location.pathname;
+        // Only redirect if not on auth pages
+        if (!currentPath.includes('/login') && !currentPath.includes('/signup')) {
+          localStorage.clear();
+          window.location.href = "/login";
+        }
       }
       return Promise.reject(new Error("Token expired"));
     }
@@ -62,10 +68,39 @@ instance.interceptors.response.use(
       console.error("401 Unauthorized error:", error.response?.data);
       
       // Only redirect to login if we're not already on the login page
-      if (typeof window !== "undefined" && !window.location.pathname.includes('/login')) {
-        console.log("Token expired or invalid, redirecting to login");
-        localStorage.clear();
-        window.location.href = "/login";
+      // and if the error is actually a token expiration
+      if (typeof window !== "undefined") {
+        const currentPath = window.location.pathname;
+        
+        // Don't redirect if already on login/signup pages
+        if (!currentPath.includes('/login') && !currentPath.includes('/signup')) {
+          console.log("Token expired or invalid, redirecting to login");
+          
+          // Check if token exists but is expired
+          const token = localStorage.getItem('token');
+          if (token) {
+            try {
+              const payload = JSON.parse(atob(token.split('.')[1]));
+              const currentTime = Math.floor(Date.now() / 1000);
+              
+              // Only redirect if token is actually expired
+              if (payload.exp && payload.exp < currentTime) {
+                localStorage.clear();
+                window.location.href = "/login";
+              }
+              // If token isn't expired but still got 401, might be a server issue
+              // Don't redirect in this case
+            } catch (e) {
+              // Invalid token format, clear and redirect
+              localStorage.clear();
+              window.location.href = "/login";
+            }
+          } else {
+            // No token at all, redirect
+            localStorage.clear();
+            window.location.href = "/login";
+          }
+        }
       }
     }
     return Promise.reject(error);

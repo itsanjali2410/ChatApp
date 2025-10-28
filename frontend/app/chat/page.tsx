@@ -308,6 +308,40 @@ export default function ChatPage() {
     }
   }, []);
 
+  // Handle navigation from notifications
+  useEffect(() => {
+    // Listen for messages from service worker (notification clicks)
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'NAVIGATE_TO_CHAT') {
+        const { chatId } = event.data;
+        if (chatId) {
+          // Find and set the active chat
+          const chat = chats.find(c => c.id === chatId);
+          if (chat) {
+            setActiveChat(chat);
+          } else {
+            console.warn('Chat not found:', chatId);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [chats]);
+
+  // Handle URL parameters for chat navigation (from notification click)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const chatId = params.get('chat');
+    if (chatId && chats.length > 0) {
+      const chat = chats.find(c => c.id === chatId);
+      if (chat) {
+        setActiveChat(chat);
+      }
+    }
+  }, [chats]);
+
   const requestNotificationPermission = async () => {
     if ('Notification' in window) {
       const permission = await Notification.requestPermission();
@@ -329,7 +363,36 @@ export default function ChatPage() {
       // Check if user is authenticated
       const token = localStorage.getItem("token");
       if (!token) {
-        setError("Please log in to access the chat");
+        // Check if this is the first load or a back navigation
+        const currentPath = window.location.pathname;
+        
+        // Only show error and redirect on actual page load, not on back navigation
+        if (currentPath.includes('/chat')) {
+          setError("Please log in to access the chat");
+          setTimeout(() => {
+            window.location.href = "/login";
+          }, 2000);
+        }
+        return;
+      }
+      
+      // Validate token format (quick check)
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const currentTime = Math.floor(Date.now() / 1000);
+        
+        if (payload.exp && payload.exp < currentTime) {
+          setError("Your session has expired. Please log in again.");
+          localStorage.clear();
+          setTimeout(() => {
+            window.location.href = "/login";
+          }, 2000);
+          return;
+        }
+      } catch (e) {
+        console.error("Invalid token format:", e);
+        setError("Invalid session. Please log in again.");
+        localStorage.clear();
         setTimeout(() => {
           window.location.href = "/login";
         }, 2000);
@@ -1901,6 +1964,8 @@ export default function ChatPage() {
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}
         currentUser={currentUser}
+        notificationPermission={notificationPermission}
+        requestNotificationPermission={requestNotificationPermission}
       />
     </div>
     </>

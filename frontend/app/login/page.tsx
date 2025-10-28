@@ -1,7 +1,7 @@
 
 "use client";
 import { useRouter } from "next/navigation";
-import React, { use, useState } from "react";
+import React, { use, useState, useEffect } from "react";
 import api from "../../utils/api";
 
 const LoginPage = () => {
@@ -11,6 +11,28 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Check if already logged in on mount
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      // Check if token is valid by trying to decode it
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const currentTime = Math.floor(Date.now() / 1000);
+        
+        // If token is not expired, redirect to chat
+        if (payload.exp && payload.exp > currentTime) {
+          const orgId = localStorage.getItem('org_id');
+          const target = orgId ? "/chat" : "/organization/create";
+          router.push(target);
+        }
+      } catch (error) {
+        // Token is invalid, clear it
+        localStorage.clear();
+      }
+    }
+  }, [router]);
 
   const handleLogin = async () => {
     setError(null);
