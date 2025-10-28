@@ -162,13 +162,10 @@ export default function ChatPage() {
   myIdRef.current = myId;
   const orgId = typeof window !== "undefined" ? localStorage.getItem("org_id") || "" : "";
   
-  // Debug logging
-  console.log("My ID from localStorage:", myId);
-  console.log("Users loaded:", users.length);
-  console.log("Users data:", users);
-  console.log("Filtered users (excluding self):", users.filter(user => user._id !== myId));
-  console.log("Admin users:", users.filter(user => user.role === 'admin'));
-  console.log("Regular users:", users.filter(user => user.role === 'user' || !user.role));
+  // Debug logging - only log when users change
+  useEffect(() => {
+    console.log("👥 Users updated:", users.length);
+  }, [users.length]);
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -198,14 +195,18 @@ export default function ChatPage() {
   const { isConnected, sendMessage: sendWSMessage } = useWebSocket({
     url: `/ws/${myId}`,
     onMessage: async (event) => {
+      console.log("📡 RAW WebSocket message received:", event.data);
       const data = JSON.parse(event.data);
-      console.log("WebSocket message received:", data);
+      console.log("📡 Parsed WebSocket message:", data.type, data);
       
       if (data.type === "new_message") {
-        console.log("Processing new_message:", data);
-        console.log("Current messages count:", messages.length);
-        console.log("Active chat (ref):", activeChatRef.current?.id);
-        console.log("Message sender:", data.sender_id, "My ID:", myIdRef.current);
+        console.log("📬 Processing new_message:", data);
+        console.log("📊 Current messages count:", messages.length);
+        console.log("💬 Active chat (ref):", activeChatRef.current?.id);
+        console.log("👤 Message sender:", data.sender_id, "My ID:", myIdRef.current);
+        console.log("💬 Message chat_id:", data.chat_id);
+        console.log("🔄 Will add to messages:", !messages.some(msg => msg.id === data.id || (msg.sender_id === data.sender_id && msg.timestamp === data.timestamp && msg.message === data.message)));
+        
         const newMessage: Message = {
           id: data.id || `ws-${Date.now()}`,
           chat_id: data.chat_id,
@@ -229,6 +230,7 @@ export default function ChatPage() {
           if (exists) return prev;
           
           const updatedMessages = [...prev, newMessage];
+          console.log("✅ Message added to state, new count:", updatedMessages.length);
           // Sort messages by timestamp to maintain correct order
           return updatedMessages.sort((a, b) => {
             const timeA = new Date(a.timestamp).getTime();
@@ -263,17 +265,28 @@ export default function ChatPage() {
 
         // Update unread count if message is not from current user and chat is not active
         if (data.sender_id !== myIdRef.current && activeChatRef.current?.id !== data.chat_id) {
+          console.log("🔔 Updating unread count for chat:", data.chat_id);
+          console.log("📊 Previous unread count:", unreadCountsRef.current[data.chat_id] || 0);
+          console.log("👁️ Active chat ID:", activeChatRef.current?.id);
+          console.log("💬 Message chat ID:", data.chat_id);
+          
           // Always increment unread count for messages from others
-          setUnreadCounts(prev => ({
-            ...prev,
-            [data.chat_id]: (prev[data.chat_id] || 0) + 1
-          }));
+          setUnreadCounts(prev => {
+            const newCount = (prev[data.chat_id] || 0) + 1;
+            console.log("✅ New unread count for chat", data.chat_id, ":", newCount);
+            return {
+              ...prev,
+              [data.chat_id]: newCount
+            };
+          });
           
           // Make badge visible for new unread messages
           setHiddenUnreadBadge(prev => ({
             ...prev,
             [data.chat_id]: false
           }));
+        } else {
+          console.log("❌ Skipping unread count update - sender is self or chat is active");
         }
 
         // Update users list to move sender to top (real-time sorting)
@@ -1689,20 +1702,20 @@ export default function ChatPage() {
               <div
                 key={chat.id}
                 onClick={() => openGroupChat(chat)}
-                className={`flex items-center px-6 py-4 hover:bg-[var(--secondary-hover)] cursor-pointer border-b border-[var(--border)] transition-all duration-200 group ${
+                className={`flex items-center px-4 sm:px-6 py-3 sm:py-4 hover:bg-[var(--secondary-hover)] cursor-pointer border-b border-[var(--border)] transition-all duration-200 group ${
                   activeChat?.id === chat.id ? 'bg-[var(--accent-light)] border-l-4 border-l-[var(--accent)]' : ''
                 }`}
               >
                 <div className="relative flex-shrink-0">
-                  <div className="w-14 h-14 rounded-lg bg-[var(--accent)] flex items-center justify-center text-[var(--text-inverse)] font-bold">
-                    <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-[var(--accent)] flex items-center justify-center text-[var(--text-inverse)] font-bold">
+                    <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
                   </div>
                 </div>
-                <div className="ml-4 flex-1 min-w-0">
+                <div className="ml-3 sm:ml-4 flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-base font-semibold text-[var(--text-primary)] truncate">
+                    <p className="text-sm sm:text-base font-semibold text-[var(--text-primary)] truncate">
                       {chat.group_name}
                     </p>
                     <p className="text-xs text-[var(--text-secondary)] font-medium whitespace-nowrap flex-shrink-0">
@@ -1720,23 +1733,25 @@ export default function ChatPage() {
                             return formatTimestamp(lastMessage.timestamp);
                           }
                         }
-                        return new Date().toLocaleTimeString('en-IN', { 
-                          hour: '2-digit', 
-                          minute: '2-digit',
-                          timeZone: 'Asia/Kolkata'
-                        });
+                        return "";
                       })()}
                     </p>
                   </div>
                   <div className="flex items-center justify-between mt-1 gap-2">
-                    <p className="text-sm text-[var(--text-secondary)] truncate">
+                    <p className="text-xs text-[var(--text-secondary)] truncate">
                       {lastMessages[chat.id] || `${chat.participants.length} members`}
                     </p>
-                    {unreadCounts[chat.id] > 0 && !hiddenUnreadBadge[chat.id] && (
-                      <div className="bg-[var(--accent)] text-[var(--text-inverse)] text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-2 flex-shrink-0">
-                        {unreadCounts[chat.id] > 99 ? '99+' : unreadCounts[chat.id]}
-                      </div>
-                    )}
+                    {(() => {
+                      if (unreadCounts[chat.id] > 0 && !hiddenUnreadBadge[chat.id]) {
+                        console.log("🏷️ Group chat badge - Chat:", chat.id, "Count:", unreadCounts[chat.id], "Hidden:", hiddenUnreadBadge[chat.id]);
+                        return (
+                          <div className="bg-[var(--accent)] text-[var(--text-inverse)] text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-2 flex-shrink-0">
+                            {unreadCounts[chat.id] > 99 ? '99+' : unreadCounts[chat.id]}
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                 </div>
               </div>
@@ -1887,11 +1902,18 @@ export default function ChatPage() {
                         )}
                       </p>
                       <div className="flex items-center space-x-1.5 sm:space-x-2">
-                        {userChat && unreadCounts[userChat.id] > 0 && !hiddenUnreadBadge[userChat.id] && (
-                          <div className="bg-[var(--accent)] text-[var(--text-inverse)] text-xs font-bold rounded-full min-w-[18px] sm:min-w-[20px] h-4 sm:h-5 flex items-center justify-center px-1.5 sm:px-2">
-                            {unreadCounts[userChat.id] > 99 ? '99+' : unreadCounts[userChat.id]}
-                          </div>
-                        )}
+                        {userChat && (() => {
+                          const shouldShow = unreadCounts[userChat.id] > 0 && !hiddenUnreadBadge[userChat.id];
+                          if (shouldShow) {
+                            console.log("👤 User chat badge - Chat:", userChat.id, "Count:", unreadCounts[userChat.id], "Hidden:", hiddenUnreadBadge[userChat.id]);
+                            return (
+                              <div className="bg-[var(--accent)] text-[var(--text-inverse)] text-xs font-bold rounded-full min-w-[18px] sm:min-w-[20px] h-4 sm:h-5 flex items-center justify-center px-1.5 sm:px-2">
+                                {unreadCounts[userChat.id] > 99 ? '99+' : unreadCounts[userChat.id]}
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
                     </div>
                   </div>

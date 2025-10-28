@@ -49,6 +49,7 @@ export const useWebSocket = ({
       };
 
       ws.current.onmessage = (event) => {
+        console.log("🔌 useWebSocket: Message received from WebSocket");
         onMessage?.(event);
       };
 

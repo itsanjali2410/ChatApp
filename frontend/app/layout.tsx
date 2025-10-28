@@ -20,22 +20,23 @@ export const metadata: Metadata = {
   title: "ChatApp - Internal Communication Platform",
   description: "A modern internal chat application with real-time messaging, file sharing, and profile management",
   manifest: "/manifest.json",
-  themeColor: "#3B82F6",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "ChatApp",
   },
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 5,
-    userScalable: true,
-    viewportFit: "cover",
-  },
   formatDetection: {
     telephone: false,
   },
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  viewportFit: "cover",
+  themeColor: "#3B82F6",
 };
 
 export default function RootLayout({

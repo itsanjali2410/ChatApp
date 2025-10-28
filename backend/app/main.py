@@ -218,7 +218,14 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
             
             if message_type == "join_chat":
                 chat_id = message_data.get("chat_id")
+                print(f"🔌 User {user_id} joining chat {chat_id}")
                 await manager.join_chat(user_id, chat_id)
+                print(f"✅ User {user_id} successfully joined chat {chat_id}")
+                # Send confirmation back to client
+                await websocket.send_text(json.dumps({
+                    "type": "joined_chat",
+                    "chat_id": chat_id
+                }))
                 
             elif message_type == "leave_chat":
                 chat_id = message_data.get("chat_id")
@@ -245,14 +252,20 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                 chat_id = message_data.get("chat_id")
                 message_content = message_data.get("message")
                 
-                # Broadcast to all users in the chat
-                await manager.broadcast_to_chat({
+                print(f"📤 Broadcasting message to chat {chat_id} from user {user_id}")
+                print(f"📊 Connected users in chat: {manager.get_connected_users_in_chat(chat_id)}")
+                
+                # Broadcast to all users in the chat (including sender for optimization)
+                broadcast_data = {
                     "type": "new_message",
                     "chat_id": chat_id,
                     "sender_id": user_id,
                     "message": message_content,
                     "timestamp": message_data.get("timestamp") or datetime.utcnow().isoformat() + "Z"
-                }, chat_id, exclude_user=user_id)
+                }
+                print(f"📡 Broadcasting data: {broadcast_data}")
+                await manager.broadcast_to_chat(broadcast_data, chat_id, exclude_user=user_id)
+                print(f"✅ Broadcast complete for chat {chat_id}")
                 
             elif message_type == "mark_delivered":
                 # Handle marking messages as delivered
