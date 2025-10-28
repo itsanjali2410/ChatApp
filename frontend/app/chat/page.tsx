@@ -9,7 +9,6 @@ import FileUpload from "../../components/FileUpload";
 import MessageBubble from "../../components/MessageBubble";
 import OnlineUsers from "../../components/OnlineUsers";
 import SettingsModal from "../../components/SettingsModal";
-import GroupCreationModal from "../../components/GroupCreationModal";
 import GroupManagementModal from "../../components/GroupManagementModal";
 import ThemeToggle from "../../components/ThemeToggle";
 
@@ -79,6 +78,7 @@ export default function ChatPage() {
   const [showOnlineUsers, setShowOnlineUsers] = useState(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [lastMessages, setLastMessages] = useState<{[chatId: string]: string}>({});
+  const [lastMessageTimestamps, setLastMessageTimestamps] = useState<{[chatId: string]: string}>({});
   const [unreadCounts, setUnreadCounts] = useState<{[chatId: string]: number}>({});
   const [lastReadTimestamps, setLastReadTimestamps] = useState<{[chatId: string]: string}>({});
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
@@ -87,7 +87,25 @@ export default function ChatPage() {
   const [showGroupCreation, setShowGroupCreation] = useState(false);
   const [showGroupManagement, setShowGroupManagement] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [showSidebar, setShowSidebar] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(true);
+  
+  // Mobile view state - track if we're showing chat or sidebar on mobile
+  const [isMobileView, setIsMobileView] = useState(false);
+  
+  // Detect screen size changes
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobileView(window.innerWidth < 1024); // lg breakpoint
+      // On mobile, always start with sidebar visible, not chat
+      if (window.innerWidth < 1024) {
+        setShowSidebar(true);
+      }
+    };
+    
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
 
   // Show sidebar by default on web, hide on mobile initially
   useEffect(() => {
@@ -147,10 +165,16 @@ export default function ChatPage() {
           });
         });
         
-        // Update last message for this chat
+        // Update last message for this chat with timestamp
         setLastMessages(prev => ({
           ...prev,
           [data.chat_id]: data.message
+        }));
+        
+        // Update last message timestamp for sorting
+        setLastMessageTimestamps(prev => ({
+          ...prev,
+          [data.chat_id]: data.timestamp || new Date().toISOString()
         }));
 
         // Update unread count if message is not from current user and chat is not active
@@ -176,18 +200,7 @@ export default function ChatPage() {
           });
         }
 
-        // Also update chats list to move the chat to top
-        setChats(prev => {
-          const chatIndex = prev.findIndex(c => c.id === data.chat_id);
-          if (chatIndex > 0) {
-            const chat = prev[chatIndex];
-            const updatedChats = [...prev];
-            updatedChats.splice(chatIndex, 1);
-            updatedChats.unshift(chat);
-            return updatedChats;
-          }
-          return prev;
-        });
+        // Update chats list - no need to manually reorder, sorting happens in render
 
         // Show notification if message is not from current user
         if (data.sender_id !== myId) {
@@ -424,18 +437,21 @@ export default function ChatPage() {
         
         // Load last messages for all chats
         const lastMessagesData: {[chatId: string]: string} = {};
+        const lastTimestampsData: {[chatId: string]: string} = {};
         for (const chat of resChats.data) {
           try {
             const msgs = await api.get(`/messages/chat/${chat.id}`);
             if (msgs.data && msgs.data.length > 0) {
               const lastMsg = msgs.data[msgs.data.length - 1];
               lastMessagesData[chat.id] = lastMsg.message || "📎 File";
+              lastTimestampsData[chat.id] = lastMsg.timestamp || new Date().toISOString();
             }
           } catch (e) {
             console.error(`Failed to load messages for chat ${chat.id}:`, e);
           }
         }
         setLastMessages(lastMessagesData);
+        setLastMessageTimestamps(lastTimestampsData);
       } catch (e: any) {
         const detail = e?.response?.data?.detail || "Failed to load users";
         setError(detail);
@@ -629,6 +645,11 @@ export default function ChatPage() {
     const targetUser = users.find(user => user._id === otherUserId);
     console.log("Target user:", targetUser);
     console.log("Target user role:", targetUser?.role);
+    
+    // Hide sidebar on mobile when opening chat
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setShowSidebar(false);
+    }
     
     if (!myId) {
       console.error("No user ID found in localStorage");
@@ -1309,10 +1330,37 @@ export default function ChatPage() {
         .scrollbar-thin::-webkit-scrollbar-thumb:hover {
           background-color: rgba(156, 163, 175, 0.7);
         }
+        
+        /* Mobile navigation transitions */
+        @media (max-width: 1023px) {
+          .chat-area {
+            touch-action: pan-y;
+            -webkit-overflow-scrolling: touch;
+          }
+          
+          .sidebar {
+            will-change: transform;
+            -webkit-overflow-scrolling: touch;
+          }
+        }
+        
+        /* Smooth transitions for mobile layout */
+        @media (max-width: 1023px) {
+          body {
+            overflow: hidden;
+          }
+          
+          .main-layout {
+            position: relative;
+            height: 100vh;
+            height: 100dvh; /* Dynamic viewport height for mobile */
+            overflow: hidden;
+          }
+        }
       `}} />
       <div className="h-screen bg-[var(--background)] flex flex-col lg:flex-row overflow-hidden relative main-layout">
-      {/* Mobile Header - Only visible on mobile when sidebar is closed or when in chat */}
-      <div className={`lg:hidden bg-[var(--secondary)] border-b border-[var(--border)] px-3 sm:px-4 py-3 flex items-center justify-between shadow-sm transition-opacity duration-300 ${showSidebar ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+      {/* Mobile Header - Only visible on mobile when sidebar is visible and no active chat */}
+      <div className={`lg:hidden bg-[var(--secondary)] border-b border-[var(--border)] px-3 sm:px-4 py-3 flex items-center justify-between shadow-sm transition-opacity duration-300 ${showSidebar && !activeChat ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         <button
           onClick={() => setShowSidebar(!showSidebar)}
           className="text-[var(--text-secondary)] hover:text-[var(--accent)] p-2 rounded-lg hover:bg-[var(--secondary-hover)] transition-all duration-200"
@@ -1321,7 +1369,8 @@ export default function ChatPage() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
-        <div className="w-8 sm:w-10"></div> {/* Responsive spacer for centering */}
+        <h1 className="text-lg sm:text-xl font-bold text-[var(--text-primary)]">Messages</h1>
+        <div className="w-12"></div> {/* Spacer for centering */}
       </div>
 
       {/* Popup Notification */}
@@ -1354,8 +1403,8 @@ export default function ChatPage() {
           </div>
         </div>
       )}
-      {/* Mobile Overlay - Only show when sidebar is open on mobile */}
-      {showSidebar && (
+      {/* Mobile Overlay - Only show when sidebar is open on mobile and no active chat */}
+      {showSidebar && !activeChat && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden transition-opacity duration-300"
           onClick={() => setShowSidebar(false)}
@@ -1363,20 +1412,14 @@ export default function ChatPage() {
       )}
 
       {/* Sidebar */}
-      <div className={`${showSidebar ? 'sidebar show translate-x-0' : 'sidebar hidden -translate-x-full'} lg:translate-x-0 fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto w-full sm:w-85vw sm:max-w-sm lg:w-80 bg-[var(--chat-sidebar)] border-r border-[var(--border)] flex flex-col transition-transform duration-300 ease-in-out shadow-lg`}>
+      <div className={`${showSidebar && !activeChat ? 'translate-x-0' : activeChat ? '-translate-x-full' : 'translate-x-0'} lg:translate-x-0 fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto w-full lg:w-80 bg-[var(--chat-sidebar)] border-r border-[var(--border)] flex flex-col transition-transform duration-300 ease-in-out lg:shadow-none shadow-2xl`}>
         {/* Header */}
         <div className="bg-[var(--secondary)] px-4 sm:px-6 py-3 sm:py-4 flex-shrink-0 border-b border-[var(--border)]">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2 sm:space-x-3">
               {/* Mobile menu button */}
-              <button 
-                className="lg:hidden text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--secondary-hover)] p-1.5 sm:p-2 rounded-lg transition-all duration-200"
-                onClick={() => setShowSidebar(false)}
-              >
-                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
+             
+                
           {currentUser && (
                 <div className="relative">
               {currentUser.profile_picture ? (
@@ -1390,7 +1433,6 @@ export default function ChatPage() {
                   {getInitials(currentUser)}
                 </div>
               )}
-                  <div className="absolute -bottom-1 -right-1 w-3 h-3 sm:w-4 sm:h-4 bg-[var(--success)] rounded-full border-2 border-[var(--secondary)]"></div>
                 </div>
               )}
               <div className="ml-1 sm:ml-2">
@@ -1401,7 +1443,7 @@ export default function ChatPage() {
             </div>
             </div>
               <button 
-                onClick={() => setShowSettings(true)}
+                onClick={() => window.location.href = '/settings'}
               className="p-2 sm:p-2.5 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--secondary-hover)] rounded-lg transition-all duration-200"
               title="Settings"
               >
@@ -1445,7 +1487,7 @@ export default function ChatPage() {
         {canCreateGroup && (
           <div className="px-4 sm:px-6 py-2 sm:py-3 border-b border-[var(--border)]">
             <button
-              onClick={() => setShowGroupCreation(true)}
+              onClick={() => window.location.href = '/create-group'}
               className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-[var(--accent)] text-[var(--text-inverse)] rounded-lg hover:bg-[var(--accent-hover)] flex items-center justify-center text-xs sm:text-sm font-semibold transition-all duration-200 shadow-sm"
             >
               <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1477,19 +1519,23 @@ export default function ChatPage() {
 
             // Sort group chats by last message timestamp
             const sortedGroupChats = filteredGroupChats.sort((a, b) => {
-              const aLastMessage = lastMessages[a.id];
-              const bLastMessage = lastMessages[b.id];
+              const aLastTimestamp = lastMessageTimestamps[a.id];
+              const bLastTimestamp = lastMessageTimestamps[b.id];
               
-              if (!aLastMessage && !bLastMessage) return 0;
-              if (!aLastMessage) return 1;
-              if (!bLastMessage) return -1;
+              if (!aLastTimestamp && !bLastTimestamp) {
+                // Both have no messages, sort by creation time
+                return new Date((b as any).created_at || 0).getTime() - new Date((a as any).created_at || 0).getTime();
+              }
+              if (!aLastTimestamp) return 1;
+              if (!bLastTimestamp) return -1;
               
-              // For now, we'll sort by chat creation time as a fallback
-              // In a real implementation, you'd want to track actual last message timestamps
-              return new Date((b as any).created_at || 0).getTime() - new Date((a as any).created_at || 0).getTime();
+              // Sort by most recent message timestamp
+              return new Date(bLastTimestamp).getTime() - new Date(aLastTimestamp).getTime();
             });
             
-            return sortedGroupChats.map(chat => (
+            return (
+              <>
+            {sortedGroupChats.map(chat => (
               <div
                 key={chat.id}
                 onClick={() => openGroupChat(chat)}
@@ -1531,18 +1577,17 @@ export default function ChatPage() {
                     <p className="text-sm text-[var(--text-secondary)] truncate font-medium">
                       {lastMessages[chat.id] || `${chat.participants.length} members`}
                     </p>
-                    <div className="flex items-center space-x-2">
-                      {unreadCounts[chat.id] > 0 && (
-                        <div className="bg-[var(--accent)] text-[var(--text-inverse)] text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-2">
-                          {unreadCounts[chat.id] > 99 ? '99+' : unreadCounts[chat.id]}
-                    </div>
-                      )}
-                      <div className="w-2.5 h-2.5 bg-[var(--success)] rounded-full"></div>
+                    {unreadCounts[chat.id] > 0 && (
+                      <div className="bg-[var(--accent)] text-[var(--text-inverse)] text-xs font-bold rounded-full min-w-[20px] h-5 flex items-center justify-center px-2">
+                        {unreadCounts[chat.id] > 99 ? '99+' : unreadCounts[chat.id]}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
-              </div>
-            ));
+            ))}
+            </>
+            );
           })()}
 
            {/* Team Members */}
@@ -1597,17 +1642,15 @@ export default function ChatPage() {
                  chat.participants.includes(myId)
                );
                
-               const aLastMessage = aChat ? lastMessages[aChat.id] : null;
-               const bLastMessage = bChat ? lastMessages[bChat.id] : null;
+               const aLastTimestamp = aChat ? lastMessageTimestamps[aChat.id] : null;
+               const bLastTimestamp = bChat ? lastMessageTimestamps[bChat.id] : null;
                
-               if (!aLastMessage && !bLastMessage) return 0;
-               if (!aLastMessage) return 1;
-               if (!bLastMessage) return -1;
+               if (!aLastTimestamp && !bLastTimestamp) return 0;
+               if (!aLastTimestamp) return 1;
+               if (!bLastTimestamp) return -1;
                
-               // Sort by last seen time as fallback
-               const aLastSeen = new Date((a as any).last_seen || 0).getTime();
-               const bLastSeen = new Date((b as any).last_seen || 0).getTime();
-               return bLastSeen - aLastSeen;
+               // Sort by most recent message timestamp
+               return new Date(bLastTimestamp).getTime() - new Date(aLastTimestamp).getTime();
              });
              
              return sortedUsers.map(user => {
@@ -1638,9 +1681,6 @@ export default function ChatPage() {
                        }`}>
                         {getInitials(user)}
                       </div>
-                    )}
-                    {user.is_online && user._id !== myId && (
-                       <span className="absolute -bottom-1 -right-1 w-3 h-3 sm:w-4 sm:h-4 bg-green-500 rounded-full border-2 border-[var(--secondary)]"></span>
                     )}
                   </div>
                    <div 
@@ -1705,10 +1745,7 @@ export default function ChatPage() {
                         {userChat && unreadCounts[userChat.id] > 0 && (
                           <div className="bg-[var(--accent)] text-[var(--text-inverse)] text-xs font-bold rounded-full min-w-[18px] sm:min-w-[20px] h-4 sm:h-5 flex items-center justify-center px-1.5 sm:px-2">
                             {unreadCounts[userChat.id] > 99 ? '99+' : unreadCounts[userChat.id]}
-                        </div>
-                      )}
-                        {!user.is_typing && user.is_online && user._id !== myId && (
-                          <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full"></div>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -1721,7 +1758,7 @@ export default function ChatPage() {
       </div>
 
       {/* Main Chat Area */}
-      <div className={`flex-1 flex flex-col bg-[var(--chat-bg)] min-h-0 h-screen w-full lg:relative relative overflow-hidden transition-opacity duration-300 chat-area ${showSidebar ? 'lg:opacity-100 opacity-0 lg:pointer-events-auto pointer-events-none' : 'opacity-100'}`}>
+      <div className={`flex-1 flex flex-col bg-[var(--chat-bg)] min-h-0 h-screen w-full lg:relative absolute inset-0 overflow-hidden transition-transform duration-300 chat-area ${activeChat ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}`}>
           {activeChat ? (
           <>
             {/* Chat Header */}
@@ -1729,13 +1766,13 @@ export default function ChatPage() {
               <div className="flex items-center space-x-2 sm:space-x-3">
                 {/* Mobile Back Button */}
                 <button 
-                  className="lg:hidden text-[var(--text-muted)] hover:text-[var(--accent)] p-1.5 sm:p-2 rounded-lg hover:bg-[var(--secondary-hover)] transition-all duration-200"
+                  className="lg:hidden text-[var(--text-secondary)] hover:text-[var(--accent)] p-2 rounded-lg hover:bg-[var(--secondary-hover)] transition-all duration-200"
                   onClick={() => {
-                    setShowSidebar(true);
                     setActiveChat(null);
+                    setShowSidebar(true);
                   }}
                 >
-                  <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
@@ -1743,7 +1780,7 @@ export default function ChatPage() {
                 {/* Chat Avatar */}
                 <div className="relative">
                   {activeChat.type === "group" ? (
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-green-500 rounded-full flex items-center justify-center">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-[var(--accent)] rounded-full flex items-center justify-center">
                        <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                       </svg>
@@ -1755,7 +1792,6 @@ export default function ChatPage() {
                       </svg>
                     </div>
                   )}
-                  <span className="absolute -bottom-1 -right-1 w-2 h-2 sm:w-3 sm:h-3 bg-green-500 rounded-full border-2 border-white"></span>
                 </div>
                 
                 {/* Chat Info */}
@@ -1767,12 +1803,6 @@ export default function ChatPage() {
                         : getDisplayName(users.find(u => activeChat.participants.includes(u._id) && u._id !== myId) || {} as User)
                       }
                     </h2>
-                    {activeChat.type === "direct" && (() => {
-                      const otherUser = users.find(u => activeChat.participants.includes(u._id) && u._id !== myId);
-                      return otherUser?.is_online ? (
-                        <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full"></div>
-                      ) : null;
-                    })()}
                   </div>
                   <p className="text-xs sm:text-sm text-[var(--text-secondary)]">
                     {activeChat.type === "group" 
@@ -1938,14 +1968,7 @@ export default function ChatPage() {
         )}
       </div>
 
-      {/* Group Creation Modal */}
-      <GroupCreationModal
-        isOpen={showGroupCreation}
-        onClose={() => setShowGroupCreation(false)}
-        users={users}
-        currentUserId={myId}
-        onGroupCreated={handleGroupCreated}
-      />
+
 
       {/* Group Management Modal */}
       {activeChat && activeChat.type === "group" && (
@@ -1959,14 +1982,6 @@ export default function ChatPage() {
         />
       )}
 
-      {/* Settings Modal */}
-      <SettingsModal
-        isOpen={showSettings}
-        onClose={() => setShowSettings(false)}
-        currentUser={currentUser}
-        notificationPermission={notificationPermission}
-        requestNotificationPermission={requestNotificationPermission}
-      />
     </div>
     </>
   );

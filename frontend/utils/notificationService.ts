@@ -63,8 +63,15 @@ export class NotificationService {
     title: string,
     options: NotificationOptions = {}
   ): Promise<void> {
-    // Only show notification if permission is granted and app is not focused
-    if (typeof window === 'undefined' || this.permission !== 'granted' || this.isAppFocused) {
+    // Only show notification if permission is granted
+    // Notifications should work even when app is focused on mobile/background
+    if (typeof window === 'undefined' || this.permission !== 'granted') {
+      return;
+    }
+    
+    // On desktop, only show if app is not focused
+    // On mobile, always show notifications
+    if (this.isAppFocused && window.innerWidth >= 1024) {
       return;
     }
 

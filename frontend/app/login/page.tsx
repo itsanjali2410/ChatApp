@@ -35,6 +35,12 @@ const LoginPage = () => {
   }, [router]);
 
   const handleLogin = async () => {
+    // Validation
+    if (!email.trim() || !password.trim()) {
+      setError("Email and password are required");
+      return;
+    }
+
     setError(null);
     setLoading(true);
     try {
@@ -53,6 +59,13 @@ const LoginPage = () => {
       setError(detail);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle Enter key press
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !loading && email.trim() && password.trim()) {
+      handleLogin();
     }
   };
 
@@ -82,7 +95,13 @@ const LoginPage = () => {
             </div>
           )}
 
-          <div className="space-y-4">
+          <form 
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleLogin();
+            }}
+            className="space-y-4"
+          >
             <div>
               <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">
         
@@ -93,6 +112,8 @@ const LoginPage = () => {
                 placeholder="Enter your email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                onKeyPress={handleKeyPress}
+                autoComplete="email"
               />
             </div>
             
@@ -105,6 +126,8 @@ const LoginPage = () => {
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  autoComplete="current-password"
                 />
                 <button
                   type="button"
@@ -124,22 +147,23 @@ const LoginPage = () => {
                 </button>
               </div>
             </div>
-          </div>
 
-          <button
-            className="w-full mt-6 bg-[var(--accent)] text-[var(--text-inverse)] py-3 rounded-lg font-medium hover:bg-[var(--accent-hover)] disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl"
-            onClick={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <div className="flex items-center justify-center">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[var(--text-inverse)] mr-2"></div>
-                Signing in...
-              </div>
-            ) : (
-              "Sign In"
-            )}
-          </button>
+            <button
+              type="submit"
+              className="w-full mt-6 bg-[var(--accent)] text-[var(--text-inverse)] py-3 rounded-lg font-medium hover:bg-[var(--accent-hover)] disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl"
+              onClick={handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <div className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[var(--text-inverse)] mr-2"></div>
+                  Signing in...
+                </div>
+              ) : (
+                "Sign In"
+              )}
+            </button>
+          </form>
 
           <div className="mt-6 text-center">
             <p className="text-[var(--text-secondary)]">
