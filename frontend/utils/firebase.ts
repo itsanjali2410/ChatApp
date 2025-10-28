@@ -1,6 +1,5 @@
 import { initializeApp } from "firebase/app";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
-import { getAnalytics } from "firebase/analytics";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -31,12 +30,7 @@ if (typeof window !== "undefined") {
       }
     }
 
-    // Initialize Analytics (only on client-side)
-    try {
-      getAnalytics(app);
-    } catch (error) {
-      console.error("Error initializing Firebase Analytics:", error);
-    }
+    // Analytics removed to prevent build errors
   } catch (error) {
     console.error("Error initializing Firebase app:", error);
   }

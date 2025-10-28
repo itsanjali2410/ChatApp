@@ -93,22 +93,35 @@ export default function ChatPage() {
   
   // Mobile view state - track if we're showing chat or sidebar on mobile
   const [isMobileView, setIsMobileView] = useState(false);
+  
+  // Firebase FCM initialization
   useEffect(() => {
     // Request FCM token
     if (notificationPermission === 'granted') {
+      console.log("Requesting FCM token...");
       requestNotificationPermissionAndToken().then((token) => {
         if (token) {
-          console.log("FCM Token obtained:", token);
+          console.log("✅ FCM Token obtained:", token);
           // Save token to backend
           saveFCMTokenToBackend(token);
         }
+      }).catch(error => {
+        console.error("❌ Error getting FCM token:", error);
       });
     }
     
     // Listen for foreground messages
     onForegroundMessage((payload) => {
-      console.log("Foreground message:", payload);
-      // Handle the message display
+      console.log("📬 Foreground message received:", payload);
+      
+      // Show notification when app is in foreground
+      if (payload.notification) {
+        notificationService.showMessageNotification(
+          payload.notification.title || 'New Message',
+          payload.notification.body || 'You have a new message',
+          payload.data?.chat_id
+        );
+      }
     });
   }, [notificationPermission]);
   // Detect screen size changes
@@ -615,15 +628,15 @@ export default function ChatPage() {
     loadMessages();
   }, [activeChat?.id]); // Only reload when chat ID changes
 
-  // Scroll to bottom when a new chat is opened
+  // Scroll to bottom when messages change or when a new chat is opened
   useEffect(() => {
     if (activeChat && messages.length > 0) {
       // Small delay to ensure messages are rendered
       setTimeout(() => {
-        scrollToBottom(true); // Force scroll when opening chat
+        scrollToBottom(true); // Force scroll when opening chat or when new messages arrive
       }, 100);
     }
-  }, [activeChat]);
+  }, [activeChat, messages.length]);
 
   // Helper functions
   const getDisplayName = (user: User) => {
@@ -1861,22 +1874,6 @@ export default function ChatPage() {
                               return "";
                             })()}
                           </p>
-                         {userChat && (
-                           <button
-                             onClick={(e) => {
-                               e.stopPropagation();
-                               if (window.confirm(`Are you sure you want to delete this chat with ${getDisplayName(user)}?`)) {
-                                 handleChatDelete(userChat.id);
-                               }
-                             }}
-                             className="opacity-0 group-hover:opacity-100 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-all"
-                             title="Delete chat"
-                           >
-                             <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                             </svg>
-                           </button>
-                         )}
                        </div>
                     </div>
                     <div className="flex items-center justify-between mt-1 gap-2">
