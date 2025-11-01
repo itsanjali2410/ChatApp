@@ -21,23 +21,47 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Received background message', payload);
   
-  const notificationTitle = payload.notification.title;
+  const notificationTitle = payload.notification?.title || payload.data?.title || 'New Message';
+  const notificationBody = payload.notification?.body || payload.data?.body || 'You have a new message';
+  const notificationIcon = payload.notification?.icon || payload.data?.icon || '/icon-192.png';
+  const chatId = payload.data?.chatId || payload.data?.chat_id || 'chatapp-message';
+  
   const notificationOptions = {
-    body: payload.notification.body,
-    icon: payload.notification.icon || '/icon-192.png',
+    body: notificationBody,
+    icon: notificationIcon,
     badge: '/icon-192.png',
-    tag: payload.data?.chatId || 'chatapp-message',
+    image: payload.notification?.image || payload.data?.image,
+    tag: chatId,
     requireInteraction: false,
-    data: payload.data,
-    vibrate: [200, 100, 200],
+    silent: false, // Ensure system notification sound plays (default sound)
+    data: {
+      ...payload.data,
+      chatId: chatId,
+      click_action: payload.data?.click_action || payload.notification?.click_action || '/chat'
+    },
+    // Enhanced vibration pattern (vibrate pattern: 200ms, pause 100ms, 200ms, pause 100ms, 200ms)
+    vibrate: [200, 100, 200, 100, 200],
+    // Actions for notification interaction
     actions: [
       {
         action: 'open',
-        title: 'Open Chat'
+        title: 'Open Chat',
+        icon: '/icon-192.png'
+      },
+      {
+        action: 'dismiss',
+        title: 'Dismiss'
       }
-    ]
+    ],
+    // Additional notification metadata
+    timestamp: Date.now(),
+    dir: 'ltr',
+    lang: 'en',
+    // Show in notification drawer and replace previous notifications with same tag
+    renotify: true
   };
 
+  // Show notification with all options
   return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
@@ -47,20 +71,30 @@ self.addEventListener('notificationclick', (event) => {
   
   event.notification.close();
   
+  const action = event.action;
   const notificationData = event.notification.data || {};
-  const targetUrl = notificationData.chatId 
-    ? `/chat?chat=${notificationData.chatId}`
-    : '/chat';
+  
+  // Handle dismiss action
+  if (action === 'dismiss') {
+    return; // Just close, don't open anything
+  }
+  
+  // Default action: open chat
+  const targetUrl = notificationData.click_action 
+    || (notificationData.chatId ? `/chat?chat=${notificationData.chatId}` : '/chat');
   
   event.waitUntil(
     clients.matchAll({
       type: 'window',
       includeUncontrolled: true
     }).then((clientList) => {
+      // Check if there's already a window/tab open
       for (let i = 0; i < clientList.length; i++) {
         const client = clientList[i];
-        if (client.url.includes('/chat') && 'focus' in client) {
+        const baseUrl = targetUrl.split('?')[0];
+        if (client.url.includes(baseUrl) && 'focus' in client) {
           return client.focus().then(() => {
+            // Post message to navigate to specific chat
             if (notificationData.chatId) {
               client.postMessage({
                 type: 'NAVIGATE_TO_CHAT',
@@ -70,6 +104,7 @@ self.addEventListener('notificationclick', (event) => {
           });
         }
       }
+      // If no existing window, open a new one
       if (clients.openWindow) {
         return clients.openWindow(targetUrl);
       }

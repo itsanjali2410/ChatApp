@@ -417,11 +417,11 @@ export default function ChatPage() {
       } else if (data.type === "message_status") {
         // Handle individual message status update
         console.log("Message status update:", data);
-        setMessages(prev => prev.map(msg => 
-          msg.id === data.message_id
-            ? { ...msg, status: data.status }
-            : msg
-        ));
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === data.message_id ? { ...msg, status: data.status } : msg
+          )
+        );
         
         // Update last message status if this is the last message
         setLastMessageStatus(prev => {
@@ -440,11 +440,11 @@ export default function ChatPage() {
       } else if (data.type === "user_status") {
         // Handle user online/offline status updates
         console.log("User status update:", data);
-        setUsers(prev => prev.map(user => 
-          user._id === data.user_id
-            ? { ...user, is_online: data.is_online }
-            : user
-        ));
+        setUsers((prev) =>
+          prev.map((user) =>
+            user._id === data.user_id ? { ...user, is_online: data.is_online } : user
+          )
+        );
       }
     },
     onOpen: () => {
@@ -462,13 +462,10 @@ export default function ChatPage() {
     },
     onClose: () => {
       console.log("WebSocket disconnected");
-      // Set user as offline when WebSocket disconnects
-      // Only attempt if we have a valid token
       const token = localStorage.getItem("token");
       if (token) {
         api.post("/users/status/offline").catch((error) => {
           console.error("Failed to set user offline:", error);
-          // If it's a 401 error, the response interceptor will handle redirect
         });
       }
     },
@@ -727,15 +724,15 @@ export default function ChatPage() {
 
   const formatLastSeen = (user: User | undefined) => {
     if (!user) return "last seen recently";
-    
+
     if (user.is_online) {
       return "online";
     }
-    
+
     if (!(user as any).last_seen) {
       return "last seen recently";
     }
-    
+
     try {
       const lastSeenDate = new Date((user as any).last_seen);
       const now = new Date();
@@ -743,12 +740,12 @@ export default function ChatPage() {
       const diffMins = Math.floor(diffMs / (1000 * 60));
       const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
       const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-      
+
       if (diffMins < 1) return "last seen just now";
       if (diffMins < 60) return `last seen ${diffMins}m ago`;
       if (diffHours < 24) return `last seen ${diffHours}h ago`;
       if (diffDays < 7) return `last seen ${diffDays}d ago`;
-      
+
       return `last seen ${lastSeenDate.toLocaleDateString()}`;
     } catch (error) {
       return "last seen recently";
@@ -1465,13 +1462,34 @@ export default function ChatPage() {
           background: var(--secondary);
         }
         
+        @media (max-width: 1023px) {
+          .chat-input-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 50;
+            background: var(--secondary);
+          }
+        }
+        
         /* Ensure chat header stays visible on mobile */
         @media (max-width: 1023px) {
           .chat-header {
-            position: sticky;
+            position: fixed;
             top: 0;
+            left: 0;
+            right: 0;
             z-index: 50;
             background: var(--secondary);
+          }
+        }
+        
+        /* Add padding to messages container to account for fixed header and input */
+        @media (max-width: 1023px) {
+          .chat-area .messages-container {
+            padding-top: 64px;
+            padding-bottom: 80px;
           }
         }
         
@@ -1901,6 +1919,7 @@ export default function ChatPage() {
 
               return (
                 <div
+
                   key={user._id}
                    className={`flex items-center px-4 sm:px-6 py-3 sm:py-4 border-b border-[var(--border)] group transition-all duration-200 user-list-item ${
                      activeChat?.id === userChat?.id ? 'bg-gray-100 border-l-4 border-l-[var(--accent)]' : ''
@@ -2032,7 +2051,7 @@ export default function ChatPage() {
           {activeChat ? (
           <>
             {/* Chat Header */}
-            <div className="bg-[var(--secondary)] px-4 sm:px-6 py-3 sm:py-4 border-b border-[var(--border)] flex items-center justify-between flex-shrink-0 shadow-sm chat-header sticky top-0 z-40">
+            <div className="bg-[var(--secondary)] px-4 sm:px-6 py-3 sm:py-4 border-b border-[var(--border)] flex items-center justify-between flex-shrink-0 shadow-sm chat-header fixed lg:sticky top-0 left-0 right-0 z-50">
               <div className="flex items-center space-x-2 sm:space-x-3">
                 {/* Mobile Back Button */}
                 <button 
@@ -2084,8 +2103,7 @@ export default function ChatPage() {
                       ? `${activeChat.participants.length} members`
                       : (() => {
                           const otherUser = users.find(u => activeChat.participants.includes(u._id) && u._id !== myId);
-                          if (otherUser?.is_online) return "online";
-                          return "tap to message";
+                          return formatLastSeen(otherUser);
                         })()
                     }
                   </p>
@@ -2125,7 +2143,7 @@ export default function ChatPage() {
             
             {/* WhatsApp Messages Area - Scrollable */}
             <div 
-              className="flex-1 overflow-y-auto bg-[var(--chat-bg)] px-2 sm:px-4 py-4 sm:py-6 scrollbar-thin scrollbar-thumb-[var(--accent)] scrollbar-track-[var(--border)] min-h-0"
+              className="flex-1 overflow-y-auto bg-[var(--chat-bg)] px-2 sm:px-4 py-4 sm:py-6 scrollbar-thin scrollbar-thumb-[var(--accent)] scrollbar-track-[var(--border)] min-h-0 messages-container"
               style={{
                 backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23f0f0f0' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
                 backgroundRepeat: 'repeat'
@@ -2181,7 +2199,7 @@ export default function ChatPage() {
             </div>
             
              {/* Message Input */}
-             <div className="bg-[var(--secondary)] px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-t border-[var(--border)] flex-shrink-0 shadow-lg safe-area-pb chat-input-container message-input">
+             <div className="bg-[var(--secondary)] px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-t border-[var(--border)] flex-shrink-0 shadow-lg safe-area-pb chat-input-container message-input fixed lg:sticky bottom-0 left-0 right-0 z-50">
               {showFileUpload && (
                  <div className="mb-3 sm:mb-4 p-3 sm:p-4 bg-[var(--secondary-hover)] rounded-lg border border-[var(--border)] shadow-sm">
                   <FileUpload
@@ -2247,8 +2265,6 @@ export default function ChatPage() {
         )}
       </div>
 
-
-
       {/* Group Management Modal */}
       {activeChat && activeChat.type === "group" && (
         <GroupManagementModal
@@ -2260,7 +2276,6 @@ export default function ChatPage() {
           onGroupUpdated={handleGroupUpdated}
         />
       )}
-
     </div>
     </>
   );

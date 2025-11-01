@@ -1,6 +1,7 @@
 // Extended notification options for service worker notifications
 interface ServiceWorkerNotificationOptions extends NotificationOptions {
   vibrate?: number[];
+  renotify?: boolean;
   actions?: Array<{
     action: string;
     title: string;
@@ -42,21 +43,28 @@ export class NotificationService {
     
     // Track if app is focused
     document.addEventListener('visibilitychange', () => {
-      this.isAppFocused = !document.hidden;
+      const isHidden = document.hidden || document.visibilityState === 'hidden';
+      this.isAppFocused = !isHidden;
       if (this.isAppFocused) {
         this.clearUnreadCount();
       }
+      console.log('📱 Page visibility changed:', isHidden ? 'hidden' : 'visible', 'isAppFocused:', this.isAppFocused);
     });
 
     // Track window focus
     window.addEventListener('focus', () => {
       this.isAppFocused = true;
       this.clearUnreadCount();
+      console.log('🖥️ Window focused');
     });
 
     window.addEventListener('blur', () => {
       this.isAppFocused = false;
+      console.log('🖥️ Window blurred');
     });
+    
+    // Initialize focus state
+    this.isAppFocused = !document.hidden && document.visibilityState !== 'hidden';
   }
 
   public async showNotification(
@@ -64,14 +72,17 @@ export class NotificationService {
     options: NotificationOptions = {}
   ): Promise<void> {
     // Only show notification if permission is granted
-    // Notifications should work even when app is focused on mobile/background
     if (typeof window === 'undefined' || this.permission !== 'granted') {
       return;
     }
     
-    // On desktop, only show if app is not focused
+    // Always show notifications when page is hidden/offscreen (background)
+    // On desktop, show if page is hidden OR app is not focused
     // On mobile, always show notifications
-    if (this.isAppFocused && window.innerWidth >= 1024) {
+    const isPageHidden = typeof document !== 'undefined' && (document.hidden || document.visibilityState === 'hidden');
+    const shouldShowOnDesktop = !this.isAppFocused || isPageHidden || window.innerWidth < 1024;
+    
+    if (!shouldShowOnDesktop && window.innerWidth >= 1024) {
       return;
     }
 
@@ -117,6 +128,14 @@ export class NotificationService {
     message: string,
     chatId: string
   ): Promise<void> {
+    // Always show notifications when page is hidden/offscreen
+    const isPageHidden = typeof document !== 'undefined' && (document.hidden || document.visibilityState === 'hidden');
+    const shouldShow = !this.isAppFocused || isPageHidden || window.innerWidth < 1024;
+    
+    if (!shouldShow && window.innerWidth >= 1024) {
+      return;
+    }
+    
     const title = `New message from ${senderName}`;
     const body = message.length > 100 ? message.substring(0, 100) + '...' : message;
     
@@ -130,20 +149,30 @@ export class NotificationService {
         badge: '/icon-192.png',
         tag: chatId, // Group notifications by chat
         requireInteraction: false,
-        silent: false,
-        vibrate: [200, 100, 200],
+        silent: false, // Ensure system notification sound plays
+        vibrate: [200, 100, 200, 100, 200], // Enhanced vibration pattern
         data: { 
           chatId, 
           senderName,
           url: '/chat',
+          click_action: '/chat',
           messageType: 'text'
         },
+        renotify: true, // Show in notification drawer
         actions: [
           {
             action: 'open',
-            title: 'Open Chat'
+            title: 'Open Chat',
+            icon: '/icon-192.png'
+          },
+          {
+            action: 'dismiss',
+            title: 'Dismiss'
           }
-        ]
+        ],
+        timestamp: Date.now(),
+        dir: 'ltr',
+        lang: 'en'
       };
       
       await registration.showNotification(title, options);
@@ -161,6 +190,14 @@ export class NotificationService {
     fileName: string,
     chatId: string
   ): Promise<void> {
+    // Always show notifications when page is hidden/offscreen
+    const isPageHidden = typeof document !== 'undefined' && (document.hidden || document.visibilityState === 'hidden');
+    const shouldShow = !this.isAppFocused || isPageHidden || window.innerWidth < 1024;
+    
+    if (!shouldShow && window.innerWidth >= 1024) {
+      return;
+    }
+    
     const title = `File from ${senderName}`;
     const body = `📎 ${fileName}`;
     
@@ -174,21 +211,31 @@ export class NotificationService {
         badge: '/icon-192.png',
         tag: chatId,
         requireInteraction: false,
-        silent: false,
-        vibrate: [200, 100, 200],
+        silent: false, // Ensure system notification sound plays
+        vibrate: [200, 100, 200, 100, 200], // Enhanced vibration pattern
         data: { 
           chatId, 
           senderName, 
           type: 'file',
           url: '/chat',
+          click_action: '/chat',
           messageType: 'file'
         },
+        renotify: true, // Show in notification drawer
         actions: [
           {
             action: 'open',
-            title: 'Open Chat'
+            title: 'Open Chat',
+            icon: '/icon-192.png'
+          },
+          {
+            action: 'dismiss',
+            title: 'Dismiss'
           }
-        ]
+        ],
+        timestamp: Date.now(),
+        dir: 'ltr',
+        lang: 'en'
       };
       
       await registration.showNotification(title, options);

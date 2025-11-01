@@ -68,13 +68,14 @@ self.addEventListener('push', (event) => {
         body: pushData.body || notificationData.body,
         icon: pushData.icon || notificationData.icon,
         badge: pushData.badge || notificationData.badge,
-        tag: pushData.tag || notificationData.tag,
+        tag: pushData.tag || pushData.chatId || notificationData.tag,
         requireInteraction: pushData.requireInteraction || false,
         data: {
           chatId: pushData.chatId || '',
           senderName: pushData.senderName || '',
           messageType: pushData.messageType || 'text',
-          url: pushData.url || '/chat'
+          url: pushData.url || '/chat',
+          click_action: pushData.click_action || '/chat'
         }
       };
     } catch (e) {
@@ -89,15 +90,26 @@ self.addEventListener('push', (event) => {
       badge: notificationData.badge,
       tag: notificationData.tag,
       requireInteraction: notificationData.requireInteraction,
+      silent: false, // Ensure system notification sound plays
       data: notificationData.data,
-      vibrate: [200, 100, 200],
+      // Enhanced vibration pattern for notifications
+      vibrate: [200, 100, 200, 100, 200],
+      // Show in notification drawer
+      renotify: true,
       actions: [
         {
           action: 'open',
           title: 'Open Chat',
           icon: '/icon-192.png'
+        },
+        {
+          action: 'dismiss',
+          title: 'Dismiss'
         }
-      ]
+      ],
+      timestamp: Date.now(),
+      dir: 'ltr',
+      lang: 'en'
     })
   );
 });
@@ -108,12 +120,22 @@ self.addEventListener('notificationclick', (event) => {
   
   event.notification.close();
   
+  const action = event.action;
   const notificationData = event.notification.data || {};
-  const targetUrl = notificationData.url || '/chat';
   
-  // If chatId is provided, append it to the URL
-  const urlToOpen = notificationData.chatId 
-    ? `${targetUrl}?chat=${notificationData.chatId}` 
+  // Handle dismiss action
+  if (action === 'dismiss') {
+    return; // Just close, don't open anything
+  }
+  
+  // Default action: open chat
+  const targetUrl = notificationData.click_action 
+    || notificationData.url 
+    || (notificationData.chatId ? `/chat?chat=${notificationData.chatId}` : '/chat');
+  
+  // If chatId is provided, append it to the URL if not already present
+  const urlToOpen = notificationData.chatId && !targetUrl.includes('chat=')
+    ? `${targetUrl.split('?')[0]}?chat=${notificationData.chatId}`
     : targetUrl;
   
   event.waitUntil(
@@ -124,7 +146,8 @@ self.addEventListener('notificationclick', (event) => {
       // Check if there's already a window/tab open with the target URL
       for (let i = 0; i < clientList.length; i++) {
         const client = clientList[i];
-        if (client.url.includes(targetUrl.split('?')[0]) && 'focus' in client) {
+        const baseUrl = urlToOpen.split('?')[0];
+        if (client.url.includes(baseUrl) && 'focus' in client) {
           return client.focus().then(() => {
             // If chatId is in the URL, navigate to that specific chat
             if (notificationData.chatId) {
