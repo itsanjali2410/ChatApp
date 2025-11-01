@@ -169,10 +169,7 @@ export class NotificationService {
             action: 'dismiss',
             title: 'Dismiss'
           }
-        ],
-        timestamp: Date.now(),
-        dir: 'ltr',
-        lang: 'en'
+        ]
       };
       
       await registration.showNotification(title, options);
@@ -232,10 +229,7 @@ export class NotificationService {
             action: 'dismiss',
             title: 'Dismiss'
           }
-        ],
-        timestamp: Date.now(),
-        dir: 'ltr',
-        lang: 'en'
+        ]
       };
       
       await registration.showNotification(title, options);
