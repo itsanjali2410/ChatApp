@@ -1,0 +1,16 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="512" height="512" fill="#3B82F6"/>
+  
+  <!-- Chat bubble icon -->
+  <g transform="translate(100, 120)">
+    <path d="M180 60h112c24.813 0 45 20.187 45 45s-20.187 45-45 45H158c-6.627 0-12 5.373-12 12v30c0 30.925-25.075 56-56 56H36c-6.627 0-12-5.373-12-12V162c0-24.813 20.187-45 45-45h112V60z" fill="white"/>
+    <path d="M292 120c0-8.284-6.716-15-15-15H167c-6.627 0-12 5.373-12 12v22c0 24.813 20.187 45 45 45h60c6.627 0 12-5.373 12-12V120h10z" fill="#DBEAFE"/>
+  </g>
+  
+  <!-- Decorative elements -->
+  <circle cx="400" cy="150" r="30" fill="white" opacity="0.3"/>
+  <circle cx="450" cy="380" r="20" fill="white" opacity="0.2"/>
+  <circle cx="120" cy="380" r="25" fill="white" opacity="0.25"/>
+</svg>
+
