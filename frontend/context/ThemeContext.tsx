@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import api from '../utils/api';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -8,7 +9,7 @@ interface ThemeContextType {
   theme: Theme;
   actualTheme: 'light' | 'dark';
   toggleTheme: () => void;
-  setTheme: (theme: Theme) => void;
+  setTheme: (theme: Theme, options?: { persist?: boolean }) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -34,32 +35,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!mounted) return;
 
-    const getSystemTheme = (): 'light' | 'dark' => {
-      if (typeof window !== 'undefined' && window.matchMedia) {
-        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      }
-      return 'light';
-    };
-
-    let resolvedTheme: 'light' | 'dark';
-    
-    if (theme === 'system') {
-      // For system theme, we'll default to light to avoid unwanted dark mode
-      resolvedTheme = 'light';
-      
-      // Optional: Uncomment to enable system theme detection
-      // resolvedTheme = getSystemTheme();
-      // const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      // const handler = (e: MediaQueryListEvent) => {
-      //   setActualTheme(e.matches ? 'dark' : 'light');
-      //   applyTheme(e.matches ? 'dark' : 'light');
-      // };
-      // mediaQuery.addEventListener('change', handler);
-      // setActualTheme(resolvedTheme);
-      // return () => mediaQuery.removeEventListener('change', handler);
-    } else {
-      resolvedTheme = theme;
-    }
+    const resolvedTheme: 'light' | 'dark' = theme === 'system' ? 'light' : theme;
 
     setActualTheme(resolvedTheme);
     applyTheme(resolvedTheme);
@@ -75,15 +51,32 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const toggleTheme = () => {
-    const newTheme = actualTheme === 'light' ? 'dark' : 'light';
-    setThemeState(newTheme);
-    localStorage.setItem('theme', newTheme);
+  const persistThemePreference = async (resolvedTheme: 'light' | 'dark') => {
+    try {
+      if (typeof window === 'undefined') return;
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      await api.put('/users/preferences/theme', { theme: resolvedTheme });
+    } catch (error) {
+      console.error('Failed to persist theme preference', error);
+    }
   };
 
-  const setTheme = (newTheme: Theme) => {
+  const setTheme = (newTheme: Theme, options?: { persist?: boolean }) => {
     setThemeState(newTheme);
-    localStorage.setItem('theme', newTheme);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('theme', newTheme);
+    }
+    const resolvedTheme = newTheme === 'system' ? 'light' : (newTheme as 'light' | 'dark');
+    if (options?.persist === false) {
+      return;
+    }
+    void persistThemePreference(resolvedTheme);
+  };
+
+  const toggleTheme = () => {
+    const newTheme = actualTheme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme, { persist: true });
   };
 
   // Apply theme on mount

@@ -10,20 +10,16 @@ const instance = axios.create({
 });
 
 // Function to check if token is valid (not expired)
+// NOTE: We don't auto-logout on expiration - session persists until explicit logout
 const isTokenValid = (token: string): boolean => {
   try {
     if (!token) return false;
     
     // Decode JWT token (basic check)
     const payload = JSON.parse(atob(token.split('.')[1]));
-    const currentTime = Math.floor(Date.now() / 1000);
     
-    // Check if token is expired
-    if (payload.exp && payload.exp < currentTime) {
-      console.log("Token is expired");
-      return false;
-    }
-    
+    // Always return true if token exists - don't check expiration
+    // Session should persist until user explicitly logs out
     return true;
   } catch (error) {
     console.error("Error validating token:", error);
@@ -51,28 +47,8 @@ instance.interceptors.request.use(async (config) => {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
   
   if (token) {
-    // Check if token needs refresh (expires within 1 hour)
-    if (needsTokenRefresh(token)) {
-      console.log("Token expires soon, but will remain valid for now");
-      // Token expiration extended to 24 hours on backend, so no immediate action needed
-    }
-    
-    // Check if token is valid before making the request
-    if (!isTokenValid(token)) {
-      console.log("Token is invalid or expired, clearing localStorage");
-      // Don't immediately redirect on request interceptor
-      // Let the response interceptor handle it
-      if (typeof window !== "undefined") {
-        const currentPath = window.location.pathname;
-        // Only redirect if not on auth pages
-        if (!currentPath.includes('/login') && !currentPath.includes('/signup')) {
-          localStorage.clear();
-          window.location.href = "/login";
-        }
-      }
-      return Promise.reject(new Error("Token expired"));
-    }
-    
+    // Always attach token - don't check expiration
+    // Session persists until explicit logout
     config.headers = config.headers || {};
     (config.headers as any)["Authorization"] = `Bearer ${token}`;
   } else {
@@ -83,46 +59,28 @@ instance.interceptors.request.use(async (config) => {
 });
 
 // Add response interceptor to handle 401 errors
+// NOTE: We don't auto-logout on 401 - session persists until explicit logout
 instance.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
       console.error("401 Unauthorized error:", error.response?.data);
       
-      // Only redirect to login if we're not already on the login page
-      // and if the error is actually a token expiration
-      if (typeof window !== "undefined") {
-        const currentPath = window.location.pathname;
-        
-        // Don't redirect if already on login/signup pages
-        if (!currentPath.includes('/login') && !currentPath.includes('/signup')) {
-          console.log("Token expired or invalid, redirecting to login");
-          
-          // Check if token exists but is expired
-          const token = localStorage.getItem('token');
-          if (token) {
-            try {
-              const payload = JSON.parse(atob(token.split('.')[1]));
-              const currentTime = Math.floor(Date.now() / 1000);
-              
-              // Only redirect if token is actually expired
-              if (payload.exp && payload.exp < currentTime) {
-                localStorage.clear();
-                window.location.href = "/login";
-              }
-              // If token isn't expired but still got 401, might be a server issue
-              // Don't redirect in this case
-            } catch (e) {
-              // Invalid token format, clear and redirect
-              localStorage.clear();
-              window.location.href = "/login";
-            }
-          } else {
-            // No token at all, redirect
-            localStorage.clear();
+      // Don't auto-logout - session persists until user explicitly logs out
+      // Only log the error, don't redirect
+      const token = localStorage.getItem('token');
+      if (!token) {
+        // Only redirect if there's no token at all (user never logged in)
+        if (typeof window !== "undefined") {
+          const currentPath = window.location.pathname;
+          if (!currentPath.includes('/login') && !currentPath.includes('/signup')) {
             window.location.href = "/login";
           }
         }
+      } else {
+        // Token exists - don't logout, just log the error
+        // This might be a temporary server issue or permission problem
+        console.warn("401 error but token exists - not logging out. Error:", error.response?.data);
       }
     }
     return Promise.reject(error);
@@ -155,6 +113,49 @@ export const markMessagesAsRead = async (chatId: string) => {
 
 export const updateMessageStatus = async (messageId: string, status: string) => {
   const response = await instance.put(`/messages/${messageId}/status`, { status });
+  return response.data;
+};
+
+// Ticket API functions
+import type { Ticket, TicketCreate, TicketUpdate } from '../types/ticket';
+
+export const createTicket = async (ticketData: TicketCreate): Promise<Ticket> => {
+  const response = await instance.post("/tickets/create", ticketData);
+  return response.data;
+};
+
+export const getTickets = async (): Promise<Ticket[]> => {
+  const response = await instance.get("/tickets/");
+  return response.data;
+};
+
+export const getMyTickets = async (): Promise<Ticket[]> => {
+  const response = await instance.get("/tickets/my-created");
+  return response.data;
+};
+
+export const getTicket = async (ticketId: string): Promise<Ticket> => {
+  const response = await instance.get(`/tickets/${ticketId}`);
+  return response.data;
+};
+
+export const updateTicket = async (ticketId: string, updateData: TicketUpdate): Promise<Ticket> => {
+  const response = await instance.put(`/tickets/${ticketId}`, updateData);
+  return response.data;
+};
+
+export const addTicketNote = async (ticketId: string, noteContent: string): Promise<Ticket> => {
+  const response = await instance.post(`/tickets/${ticketId}/notes`, { content: noteContent });
+  return response.data;
+};
+
+export const addTicketMessage = async (ticketId: string, messageData: any): Promise<Ticket> => {
+  const response = await instance.post(`/tickets/${ticketId}/messages`, messageData);
+  return response.data;
+};
+
+export const deleteTicket = async (ticketId: string): Promise<void> => {
+  const response = await instance.delete(`/tickets/${ticketId}`);
   return response.data;
 };
 

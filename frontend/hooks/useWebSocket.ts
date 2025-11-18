@@ -24,11 +24,18 @@ export const useWebSocket = ({
   maxReconnectAttempts = 5,
 }: UseWebSocketOptions) => {
   const [isConnected, setIsConnected] = useState(false);
-  const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const reconnectAttemptsRef = useRef(0);
   const ws = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const messageQueue = useRef<any[]>([]);
+  const isConnectingRef = useRef(false);
 
   const connect = () => {
+    // Prevent multiple simultaneous connection attempts
+    if (isConnectingRef.current || (ws.current && (ws.current.readyState === WebSocket.CONNECTING || ws.current.readyState === WebSocket.OPEN))) {
+      return;
+    }
+
     try {
       // Get token from localStorage
       const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -36,6 +43,8 @@ export const useWebSocket = ({
         console.error('No authentication token found');
         return;
       }
+      
+      isConnectingRef.current = true;
       
       // Add token as query parameter
       const separator = url.includes('?') ? '&' : '?';
@@ -47,7 +56,19 @@ export const useWebSocket = ({
       
       ws.current.onopen = (event) => {
         setIsConnected(true);
-        setReconnectAttempts(0);
+        reconnectAttemptsRef.current = 0;
+        isConnectingRef.current = false;
+        console.log('✅ WebSocket connection opened');
+        // Send any queued messages
+        if (messageQueue.current.length > 0 && ws.current) {
+          console.log(`📤 Sending ${messageQueue.current.length} queued messages`);
+          while (messageQueue.current.length > 0) {
+            const queuedMessage = messageQueue.current.shift();
+            if (queuedMessage && ws.current) {
+              ws.current.send(JSON.stringify(queuedMessage));
+            }
+          }
+        }
         onOpen?.(event);
       };
 
@@ -57,24 +78,31 @@ export const useWebSocket = ({
 
       ws.current.onclose = (event) => {
         setIsConnected(false);
+        isConnectingRef.current = false;
+        console.log('🔌 WebSocket connection closed', event.code, event.reason);
         onClose?.(event);
         
         // Attempt to reconnect
-        if (reconnectAttempts < maxReconnectAttempts) {
+        if (reconnectAttemptsRef.current < maxReconnectAttempts) {
+          reconnectAttemptsRef.current += 1;
+          console.log(`🔄 Attempting to reconnect (${reconnectAttemptsRef.current}/${maxReconnectAttempts})...`);
           reconnectTimeoutRef.current = setTimeout(() => {
-            setReconnectAttempts(prev => prev + 1);
             connect();
           }, reconnectInterval);
+        } else {
+          console.error('❌ Max reconnection attempts reached');
         }
       };
 
       ws.current.onerror = (event) => {
+        isConnectingRef.current = false;
         // WebSocket errors during connection are normal and will trigger onclose
         // The onclose handler will handle reconnection automatically
-        // Only call onError callback, don't log here to avoid noise
+        console.error('❌ WebSocket error:', event);
         onError?.(event);
       };
     } catch (error) {
+      isConnectingRef.current = false;
       console.error('WebSocket connection error:', error);
     }
   };
@@ -88,41 +116,73 @@ export const useWebSocket = ({
       ws.current = null;
     }
     setIsConnected(false);
+    messageQueue.current = []; // Clear message queue on disconnect
   };
 
   const sendMessage = (message: any) => {
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
       ws.current.send(JSON.stringify(message));
-    } else {
-      console.warn('WebSocket is not connected or still connecting. ReadyState:', ws.current?.readyState);
+    } else if (ws.current && ws.current.readyState === WebSocket.CONNECTING) {
       // Queue the message if WebSocket is connecting
-      if (ws.current && ws.current.readyState === WebSocket.CONNECTING) {
-        // Wait for connection to open, then send
-        const checkAndSend = () => {
-          if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-            ws.current.send(JSON.stringify(message));
-          } else if (ws.current && ws.current.readyState === WebSocket.CONNECTING) {
-            // Retry after a short delay
-            setTimeout(checkAndSend, 100);
+      messageQueue.current.push(message);
+      // Wait for connection to open, then send queued messages
+      const checkAndSend = () => {
+        if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+          // Send all queued messages
+          while (messageQueue.current.length > 0) {
+            const queuedMessage = messageQueue.current.shift();
+            if (queuedMessage && ws.current) {
+              ws.current.send(JSON.stringify(queuedMessage));
+            }
           }
-        };
-        setTimeout(checkAndSend, 100);
-      }
+        } else if (ws.current && ws.current.readyState === WebSocket.CONNECTING) {
+          // Retry after a short delay
+          setTimeout(checkAndSend, 100);
+        } else {
+          // Connection failed, clear queue
+          messageQueue.current = [];
+        }
+      };
+      setTimeout(checkAndSend, 100);
+    } else {
+      // WebSocket is not available, queue the message
+      messageQueue.current.push(message);
+      console.warn('WebSocket is not connected. ReadyState:', ws.current?.readyState, 'Message queued');
     }
   };
 
   useEffect(() => {
     connect();
     
+    // Handle page visibility changes - reconnect when page becomes visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !isConnected && (!ws.current || ws.current.readyState === WebSocket.CLOSED)) {
+        console.log('Page became visible, reconnecting WebSocket...');
+        connect();
+      }
+    };
+    
+    // Handle window focus - reconnect if needed
+    const handleFocus = () => {
+      if (!isConnected && (!ws.current || ws.current.readyState === WebSocket.CLOSED)) {
+        console.log('Window focused, reconnecting WebSocket...');
+        connect();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    
     return () => {
       disconnect();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
     };
-  }, [url]);
+  }, [url]); // Removed isConnected from dependencies to prevent infinite loops
 
   return {
     isConnected,
     sendMessage,
     disconnect,
-    reconnectAttempts,
   };
 };

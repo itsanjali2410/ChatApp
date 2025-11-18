@@ -76,7 +76,7 @@ export const useWebSocketMessages = (
         setHiddenUnreadBadge(prev => ({ ...prev, [data.chat_id]: false }));
       }
 
-      // Show notification for messages from others
+      // Show notification for messages from others - ALWAYS show notifications even if chat is open
       if (data.sender_id !== myId) {
         const chatName = isGroupChat ? (chat?.group_name || 'Group Chat') : senderName;
 
@@ -88,6 +88,7 @@ export const useWebSocketMessages = (
         notificationService.playNotificationSound();
         notificationService.vibrate();
 
+        // Always show popup notification, even if chat is open
         setPopupMessage({
           sender: chatName,
           message: data.message_type === 'file' ? `📎 ${data.message}` : data.message
@@ -98,16 +99,26 @@ export const useWebSocketMessages = (
           setPopupMessage(null);
         }, 3000);
 
-        if (data.message_type === 'file') {
-          notificationService.showFileNotification(chatName, data.message, data.chat_id).catch(() => { });
-        } else {
-          notificationService.showMessageNotification(chatName, data.message, data.chat_id).catch(() => { });
+        // Always show browser notifications, even when chat window is open
+        // Check if window is focused - if not, show notification
+        const isWindowFocused = typeof window !== 'undefined' && document.hasFocus();
+        
+        // Show notification if window is not focused OR if it's a different chat than the active one
+        const shouldShowNotification = !isWindowFocused || activeChatRef.current?.id !== data.chat_id;
+        
+        if (shouldShowNotification) {
+          if (data.message_type === 'file') {
+            notificationService.showFileNotification(chatName, data.message, data.chat_id).catch(() => { });
+          } else {
+            notificationService.showMessageNotification(chatName, data.message, data.chat_id).catch(() => { });
+          }
         }
       }
 
       setUsers(prev => [...prev]);
     } else if (data.type === "typing") {
-      // Typing indicator handled separately
+      // Typing indicator is handled in the main chat component via WebSocket onMessage
+      // This hook doesn't need to handle it here
     } else if (data.type === "messages_delivered") {
       setMessages(prev => prev.map(msg =>
         msg.chat_id === data.chat_id && msg.sender_id !== myId && msg.status === "sent"

@@ -85,11 +85,16 @@ export default function SettingsPage() {
   const [profilePicture, setProfilePicture] = useState<File | null>(null);
   const [uploadingProfilePicture, setUploadingProfilePicture] = useState(false);
   const [profilePicturePreview, setProfilePicturePreview] = useState<string | null>(null);
+  const [removingProfilePicture, setRemovingProfilePicture] = useState(false);
   
   // Admin form states
   const [newUser, setNewUser] = useState({ username: "", email: "", password: "" });
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editForm, setEditForm] = useState({ username: "", email: "", password: "" });
+  const [showNewUserPassword, setShowNewUserPassword] = useState(false);
+  const [showEditPassword, setShowEditPassword] = useState(false);
+  const notificationsBlocked = notificationPermission === 'denied';
+  const notificationsGranted = notificationPermission === 'granted';
 
   useEffect(() => {
     if (!profilePicture) {
@@ -193,6 +198,24 @@ export default function SettingsPage() {
     } finally {
       setUploadingProfilePicture(false);
       setProfilePicture(null);
+    }
+  };
+
+  const handleRemoveProfilePicture = async () => {
+    setRemovingProfilePicture(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await api.delete('/files/profile-picture');
+      setProfilePicture(null);
+      setProfilePicturePreview(null);
+      setSuccess('Profile picture removed successfully!');
+      await loadData();
+    } catch (error: unknown) {
+      const detail = getApiErrorMessage(error, "Failed to remove profile picture");
+      setError(detail);
+    } finally {
+      setRemovingProfilePicture(false);
     }
   };
   
@@ -486,6 +509,21 @@ export default function SettingsPage() {
                 </div>
               </div>
 
+              <div className="mt-4 flex items-center justify-between">
+                <p className="text-sm text-[var(--text-secondary)]">
+                  {user?.profile_picture ? 'Current photo is active across apps.' : 'No profile photo uploaded yet.'}
+                </p>
+                {user?.profile_picture && (
+                  <button
+                    onClick={handleRemoveProfilePicture}
+                    disabled={removingProfilePicture}
+                    className="text-sm text-red-500 hover:text-red-600 font-medium disabled:opacity-50"
+                  >
+                    {removingProfilePicture ? 'Removing...' : 'Remove Photo'}
+                  </button>
+                )}
+              </div>
+
               {profilePicture && (
                 <div className="mt-4 p-3 bg-[var(--accent-light)] border border-[var(--accent)] rounded-lg">
                   <div className="flex items-center justify-between">
@@ -611,17 +649,25 @@ export default function SettingsPage() {
                 <div>
                   <p className="font-medium text-[var(--text-primary)]">Notifications</p>
                   <p className="text-sm text-[var(--text-secondary)]">
-                    {notificationPermission === 'granted' 
-                      ? 'Enabled'
-                      : 'Enable notifications for new messages'}
+                    {notificationsGranted && 'Notifications are enabled on this device.'}
+                    {notificationsBlocked && 'Notifications are blocked. Enable them to receive alerts.'}
+                    {notificationPermission === 'default' && 'Notifications start enabled by default. We will only prompt when needed.'}
                   </p>
+                  {notificationPermission !== 'denied' && (
+                    <div className="mt-2 inline-flex items-center text-xs font-semibold text-green-500">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className="ml-1">Default: Enabled</span>
+                    </div>
+                  )}
                 </div>
-                {notificationPermission !== 'granted' && (
+                {!notificationsGranted && (
                   <button
                     onClick={requestNotificationPermission}
                     className="px-4 py-2 bg-[var(--accent)] text-[var(--text-inverse)] rounded-lg hover:bg-[var(--accent-hover)] text-sm font-medium"
                   >
-                    Enable
+                    {notificationsBlocked ? 'Enable' : 'Enable now'}
                   </button>
                 )}
               </div>
@@ -708,6 +754,8 @@ export default function SettingsPage() {
                   placeholder="Enter username" 
                   value={newUser.username} 
                   onChange={(e) => setNewUser({ ...newUser, username: e.target.value })} 
+                  autoComplete="off"
+                  name="new-user-username"
                 />
               </div>
               
@@ -718,18 +766,40 @@ export default function SettingsPage() {
                   placeholder="Enter email" 
                   value={newUser.email} 
                   onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} 
+                  autoComplete="off"
+                  name="new-user-email"
                 />
               </div>
               
               <div>
                 <label className="block text-sm text-[var(--text-primary)] mb-1">Password</label>
-                <input 
-                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 bg-[var(--background)] text-[var(--text-primary)]" 
-                  placeholder="Enter password" 
-                  type="password" 
-                  value={newUser.password} 
-                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} 
-                />
+                <div className="relative">
+                  <input 
+                    className="w-full px-3 pr-10 py-2 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 bg-[var(--background)] text-[var(--text-primary)]" 
+                    placeholder="Enter password" 
+                    type={showNewUserPassword ? "text" : "password"}
+                    value={newUser.password} 
+                    onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} 
+                    autoComplete="new-password"
+                    name="new-user-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewUserPassword((prev) => !prev)}
+                    className="absolute inset-y-0 right-3 flex items-center text-[var(--text-muted)] hover:text-[var(--accent)]"
+                  >
+                    {showNewUserPassword ? (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878L21 21M9.878 9.878L3 3" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               </div>
               
               <button 
@@ -821,13 +891,31 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">New Password (optional)</label>
-                  <input 
-                    className="w-full px-3 py-2 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 bg-[var(--background)] text-[var(--text-primary)]" 
-                    type="password" 
-                    placeholder="Leave blank to keep current password"
-                    value={editForm.password} 
-                    onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} 
-                  />
+                  <div className="relative">
+                    <input 
+                      className="w-full px-3 pr-10 py-2 border border-[var(--border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/20 bg-[var(--background)] text-[var(--text-primary)]" 
+                      type={showEditPassword ? "text" : "password"}
+                      placeholder="Leave blank to keep current password"
+                      value={editForm.password} 
+                      onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} 
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowEditPassword((prev) => !prev)}
+                      className="absolute inset-y-0 right-3 flex items-center text-[var(--text-muted)] hover:text-[var(--accent)]"
+                    >
+                      {showEditPassword ? (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878L21 21M9.878 9.878L3 3" />
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                 </div>
                 <div className="flex space-x-3">
                   <button

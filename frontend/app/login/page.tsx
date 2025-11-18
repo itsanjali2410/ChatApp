@@ -16,19 +16,18 @@ const LoginPage = () => {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
-      // Check if token is valid by trying to decode it
+      // Check if token exists - if it does, redirect to chat
+      // Session persists until explicit logout, so we don't check expiration
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
-        const currentTime = Math.floor(Date.now() / 1000);
-        
-        // If token is not expired, redirect to chat
-        if (payload.exp && payload.exp > currentTime) {
-          const orgId = localStorage.getItem('org_id');
-          const target = orgId ? "/chat" : "/organization/create";
-          router.push(target);
-        }
+        // Token format is valid - redirect to chat
+        // Don't check expiration - session never expires automatically
+        const orgId = localStorage.getItem('org_id');
+        const target = orgId ? "/chat" : "/organization/create";
+        router.push(target);
       } catch (error) {
-        // Token is invalid, clear it
+        // Token format is invalid, clear it
+        console.error("Invalid token format:", error);
         localStorage.clear();
       }
     }

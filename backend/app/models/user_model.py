@@ -1,11 +1,14 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, Literal
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 class FCMTokenUpdate(BaseModel):
     fcm_token: str
     timestamp: Optional[str] = None
+
+class ThemePreferenceUpdate(BaseModel):
+    theme: Literal["light", "dark"]
     
 class User(BaseModel):
     username: str

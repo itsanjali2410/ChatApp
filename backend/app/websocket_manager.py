@@ -87,6 +87,21 @@ class ConnectionManager:
         if chat_id in self.chat_connections:
             return list(self.chat_connections[chat_id])
         return []
+    
+    async def broadcast_to_org(self, org_id: str, message: dict, exclude_user: str = None):
+        """Broadcast message to all users in an organization"""
+        from .services.user_service import users_collection
+        org_users = list(users_collection.find({"organization_id": org_id}))
+        user_ids = [str(user["_id"]) for user in org_users]
+        
+        for user_id in user_ids:
+            if exclude_user and user_id == exclude_user:
+                continue
+            if user_id in self.active_connections:
+                try:
+                    await self.active_connections[user_id].send_text(json.dumps(message))
+                except Exception as e:
+                    print(f"Error sending to user {user_id}: {e}")
 
 # Global connection manager instance
 manager = ConnectionManager()

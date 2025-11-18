@@ -47,7 +47,10 @@ function SignupForm() {
   React.useEffect(() => {
     const qOrg = search.get("org") || "";
     const qToken = search.get("token") || "";
-    if (qOrg || qToken) setMode("invite");
+    if (qOrg || qToken) {
+      setMode("invite");
+      setNeedOrgSetup(false);
+    }
     if (qOrg) setOrgId(qOrg);
     if (qToken) setToken(qToken);
   }, [search]);
@@ -151,7 +154,12 @@ function SignupForm() {
                   ? "bg-[var(--accent)] text-[var(--text-inverse)] shadow-md" 
                   : "text-[var(--text-secondary)] hover:text-[var(--accent)]"
               }`}
-              onClick={() => setMode("normal")}
+              onClick={() => {
+                setMode("normal");
+                if (email.trim()) {
+                  checkEmail(email.trim());
+                }
+              }}
             >
               New Account
             </button>
@@ -161,7 +169,10 @@ function SignupForm() {
                   ? "bg-[var(--accent)] text-[var(--text-inverse)] shadow-md" 
                   : "text-[var(--text-secondary)] hover:text-[var(--accent)]"
               }`}
-              onClick={() => setMode("invite")}
+              onClick={() => {
+                setMode("invite");
+                setNeedOrgSetup(false);
+              }}
             >
               Join with Invite
             </button>
@@ -221,8 +232,13 @@ function SignupForm() {
                   placeholder="you@example.com"
                   value={email}
                   onChange={(e) => {
-                    setEmail(e.target.value);
-                    checkEmail(e.target.value);
+                    const value = e.target.value;
+                    setEmail(value);
+                    if (mode === "normal") {
+                      checkEmail(value);
+                    } else {
+                      setNeedOrgSetup(false);
+                    }
                   }}
                 />
               </div>

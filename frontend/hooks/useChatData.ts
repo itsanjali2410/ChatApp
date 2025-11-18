@@ -30,22 +30,23 @@ export const useChatData = () => {
       return;
     }
 
-    // Validate token
+    // Validate token format only - don't check expiration
+    // Session persists until user explicitly logs out
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
-      const currentTime = Math.floor(Date.now() / 1000);
-
-      if (payload.exp && payload.exp < currentTime) {
-        setError("Your session has expired. Please log in again.");
-        localStorage.clear();
-        setTimeout(() => { window.location.href = "/login"; }, 2000);
-        return;
-      }
+      // Token format is valid - proceed
+      // Don't check expiration - session never expires automatically
     } catch (e) {
       console.error("Invalid token format:", e);
-      setError("Invalid session. Please log in again.");
-      localStorage.clear();
-      setTimeout(() => { window.location.href = "/login"; }, 2000);
+      // Only redirect if token format is completely invalid
+      // This means user never logged in properly
+      if (typeof window !== "undefined") {
+        const currentPath = window.location.pathname;
+        if (!currentPath.includes('/login') && !currentPath.includes('/signup')) {
+          setError("Invalid session. Please log in.");
+          setTimeout(() => { window.location.href = "/login"; }, 2000);
+        }
+      }
       return;
     }
 

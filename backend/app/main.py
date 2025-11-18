@@ -1,5 +1,7 @@
 from datetime import timedelta
 from fastapi import FastAPI, HTTPException, APIRouter, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from werkzeug.security import check_password_hash
 from werkzeug.security import check_password_hash as check_user_password_hash
@@ -10,6 +12,7 @@ from .routes.chat_routes import router as chat_routes
 from .routes.message_routes import router as message_routes
 from .routes.file_routes import router as file_routes
 from .routes.admin_routes import router as admin_routes
+from .routes.ticket_routes import router as ticket_routes
 from .config import db
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,6 +43,29 @@ app.add_middleware(
 )
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "change-me-session-secret"))
 
+# Global exception handler for validation errors
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc: RequestValidationError):
+    """Handle Pydantic validation errors globally"""
+    errors = exc.errors()
+    error_details = []
+    for error in errors:
+        field_path = " -> ".join(str(loc) for loc in error["loc"])
+        error_details.append({
+            "field": field_path,
+            "message": error["msg"],
+            "type": error["type"],
+            "input": error.get("input")
+        })
+    logger.error(f"Validation error on {request.url.path}: {error_details}")
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": f"Validation error: {error_details[0]['message']}",
+            "errors": error_details
+        }
+    )
+
 # Mount static files for uploads
 # app.mount("/files", StaticFiles(directory="uploads"), name="files")
 
@@ -57,6 +83,7 @@ app.include_router(chat_routes, tags=["Chats"])
 app.include_router(message_routes, tags=["Messages"])
 app.include_router(file_routes, tags=["Files"])
 app.include_router(admin_routes, tags=["Admin"])
+app.include_router(ticket_routes, tags=["Tickets"])
 
 @app.get("/")
 def root():

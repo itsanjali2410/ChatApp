@@ -95,6 +95,147 @@ async def upload_file(
         print(f"❌ General Exception: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
+@router.post("/upload-profile-picture")
+async def upload_profile_picture(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload a profile picture for the current user"""
+    try:
+        # Validate that it's an image
+        if not file.content_type or not file.content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="Only image files are allowed for profile pictures")
+        
+        # Validate file size (max 5MB for profile pictures)
+        file_content = await file.read()
+        if len(file_content) > 5 * 1024 * 1024:  # 5MB
+            raise HTTPException(status_code=400, detail="Profile picture size must be less than 5MB")
+        
+        # Reset file pointer
+        await file.seek(0)
+        
+        # Save file
+        saved_file = await save_file(file, "image")
+        
+        # Update user profile picture in database
+        from ..services.user_service import users_collection, get_user_by_email
+        from ..services.admin_service import get_admin_by_email, admin_collection
+        user_email = current_user.get("sub")
+        role = current_user.get("role", "user")
+        
+        if role == "admin":
+            admin = get_admin_by_email(user_email)
+            if not admin:
+                raise HTTPException(status_code=404, detail="Admin not found")
+            admin_collection.update_one(
+                {"_id": admin["_id"]},
+                {"$set": {"profile_picture": saved_file["file_path"]}}
+            )
+        else:
+            user = get_user_by_email(user_email)
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            users_collection.update_one(
+                {"_id": user["_id"]},
+                {"$set": {"profile_picture": saved_file["file_path"]}}
+            )
+        
+        file_url = get_file_url(saved_file["file_path"])
+        
+        return {
+            "success": True,
+            "profile_picture_url": file_url,
+            "message": "Profile picture updated successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Profile picture upload failed: {str(e)}")
+
+@router.post("/upload-selfie")
+async def upload_selfie(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload a selfie for the current user"""
+    try:
+        # Validate that it's an image
+        if not file.content_type or not file.content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="Only image files are allowed for selfies")
+        
+        # Validate file size (max 5MB for selfies)
+        file_content = await file.read()
+        if len(file_content) > 5 * 1024 * 1024:  # 5MB
+            raise HTTPException(status_code=400, detail="Selfie size must be less than 5MB")
+        
+        # Reset file pointer
+        await file.seek(0)
+        
+        # Save file
+        saved_file = await save_file(file, "image")
+        
+        # Update user selfie in database
+        from ..services.user_service import users_collection, get_user_by_email
+        from ..services.admin_service import get_admin_by_email, admin_collection
+        user_email = current_user.get("sub")
+        role = current_user.get("role", "user")
+        
+        if role == "admin":
+            admin = get_admin_by_email(user_email)
+            if not admin:
+                raise HTTPException(status_code=404, detail="Admin not found")
+            admin_collection.update_one(
+                {"_id": admin["_id"]},
+                {"$set": {"selfie": saved_file["file_path"]}}
+            )
+        else:
+            user = get_user_by_email(user_email)
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            users_collection.update_one(
+                {"_id": user["_id"]},
+                {"$set": {"selfie": saved_file["file_path"]}}
+            )
+        
+        file_url = get_file_url(saved_file["file_path"])
+        
+        return {
+            "success": True,
+            "selfie_url": file_url,
+            "message": "Selfie updated successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Selfie upload failed: {str(e)}")
+
+@router.delete("/profile-picture")
+async def delete_profile_picture(current_user: dict = Depends(get_current_user)):
+    """Remove current user's profile picture."""
+    return _clear_user_image("profile_picture", current_user)
+
+@router.delete("/selfie")
+async def delete_selfie(current_user: dict = Depends(get_current_user)):
+    """Remove current user's selfie."""
+    return _clear_user_image("selfie", current_user)
+
+@router.get("/info/supported-types")
+async def get_supported_file_types():
+    """Get list of supported file types"""
+    return {
+        "images": list(ALLOWED_IMAGE_TYPES),
+        "documents": list(ALLOWED_DOCUMENT_TYPES),
+        "max_image_size_mb": 20,
+        "max_document_size_mb": 50,
+        "max_profile_picture_size_mb": 5,
+        "supported_extensions": {
+            "images": ["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"],
+            "documents": ["pdf", "doc", "docx", "txt", "xls", "xlsx", "ppt", "pptx", "rtf", "zip", "csv", "json", "xml"]
+        }
+    }
+
 @router.get("/{file_path:path}")
 async def get_file(file_path: str):
     """Serve uploaded files"""
@@ -194,111 +335,40 @@ async def delete_uploaded_file(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
 
-@router.post("/upload-profile-picture")
-async def upload_profile_picture(
-    file: UploadFile = File(...),
-    current_user: dict = Depends(get_current_user)
-):
-    """Upload a profile picture for the current user"""
-    try:
-        # Validate that it's an image
-        if not file.content_type or not file.content_type.startswith('image/'):
-            raise HTTPException(status_code=400, detail="Only image files are allowed for profile pictures")
-        
-        # Validate file size (max 5MB for profile pictures)
-        file_content = await file.read()
-        if len(file_content) > 5 * 1024 * 1024:  # 5MB
-            raise HTTPException(status_code=400, detail="Profile picture size must be less than 5MB")
-        
-        # Reset file pointer
-        await file.seek(0)
-        
-        # Save file
-        saved_file = await save_file(file, "image")
-        
-        # Update user profile picture in database
-        from ..services.user_service import users_collection, get_user_by_email
-        user_email = current_user.get("sub")
+def _clear_user_image(field_name: str, current_user: dict):
+    """Utility to remove profile/selfie images for current user/admin."""
+    user_email = current_user.get("sub")
+    if not user_email:
+        raise HTTPException(status_code=400, detail="User email missing in token")
+
+    role = current_user.get("role", "user")
+    file_path = None
+
+    if role == "admin":
+        from ..services.admin_service import get_admin_by_email, admin_collection
+        admin = get_admin_by_email(user_email)
+        if not admin:
+            raise HTTPException(status_code=404, detail="Admin not found")
+        file_path = admin.get(field_name)
+        admin_collection.update_one(
+            {"_id": admin["_id"]},
+            {"$unset": {field_name: ""}}
+        )
+    else:
+        from ..services.user_service import get_user_by_email, users_collection
         user = get_user_by_email(user_email)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        
+        file_path = user.get(field_name)
         users_collection.update_one(
             {"_id": user["_id"]},
-            {"$set": {"profile_picture": saved_file["file_path"]}}
+            {"$unset": {field_name: ""}}
         )
-        
-        file_url = get_file_url(saved_file["file_path"])
-        
-        return {
-            "success": True,
-            "profile_picture_url": file_url,
-            "message": "Profile picture updated successfully"
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Profile picture upload failed: {str(e)}")
 
-@router.post("/upload-selfie")
-async def upload_selfie(
-    file: UploadFile = File(...),
-    current_user: dict = Depends(get_current_user)
-):
-    """Upload a selfie for the current user"""
-    try:
-        # Validate that it's an image
-        if not file.content_type or not file.content_type.startswith('image/'):
-            raise HTTPException(status_code=400, detail="Only image files are allowed for selfies")
-        
-        # Validate file size (max 5MB for selfies)
-        file_content = await file.read()
-        if len(file_content) > 5 * 1024 * 1024:  # 5MB
-            raise HTTPException(status_code=400, detail="Selfie size must be less than 5MB")
-        
-        # Reset file pointer
-        await file.seek(0)
-        
-        # Save file
-        saved_file = await save_file(file, "image")
-        
-        # Update user selfie in database
-        from ..services.user_service import users_collection, get_user_by_email
-        user_email = current_user.get("sub")
-        user = get_user_by_email(user_email)
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        users_collection.update_one(
-            {"_id": user["_id"]},
-            {"$set": {"selfie": saved_file["file_path"]}}
-        )
-        
-        file_url = get_file_url(saved_file["file_path"])
-        
-        return {
-            "success": True,
-            "selfie_url": file_url,
-            "message": "Selfie updated successfully"
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Selfie upload failed: {str(e)}")
+    if file_path:
+        try:
+            delete_file(file_path)
+        except Exception as exc:
+            print(f"Failed to delete {field_name} file {file_path}: {exc}")
 
-@router.get("/info/supported-types")
-async def get_supported_file_types():
-    """Get list of supported file types"""
-    return {
-        "images": list(ALLOWED_IMAGE_TYPES),
-        "documents": list(ALLOWED_DOCUMENT_TYPES),
-        "max_image_size_mb": 20,
-        "max_document_size_mb": 50,
-        "max_profile_picture_size_mb": 5,
-        "supported_extensions": {
-            "images": ["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"],
-            "documents": ["pdf", "doc", "docx", "txt", "xls", "xlsx", "ppt", "pptx", "rtf", "zip", "csv", "json", "xml"]
-        }
-    }
+    return {"success": True, "message": f"{field_name.replace('_', ' ').title()} removed"}

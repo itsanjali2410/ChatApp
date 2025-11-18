@@ -29,6 +29,7 @@ export default function ProfileManager({ onProfileUpdate }: ProfileManagerProps)
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [deletingPhoto, setDeletingPhoto] = useState<'profile_picture' | 'selfie' | null>(null);
   const [activeTab, setActiveTab] = useState<'profile' | 'pictures'>('profile');
 
   const [formData, setFormData] = useState({
@@ -46,22 +47,25 @@ export default function ProfileManager({ onProfileUpdate }: ProfileManagerProps)
     fetchProfile();
   }, []);
 
-  const fetchProfile = async () => {
+  const fetchProfile = async (): Promise<ProfileData | null> => {
     try {
       const response = await api.get('/users/profile/me');
-      setProfile(response.data);
+      const profileData = response.data;
+      setProfile(profileData);
       setFormData({
-        first_name: response.data.first_name || '',
-        last_name: response.data.last_name || '',
-        bio: response.data.bio || '',
-        linkedin_url: response.data.linkedin_url || '',
-        instagram_url: response.data.instagram_url || '',
-        phone: response.data.phone || '',
-        department: response.data.department || '',
-        position: response.data.position || ''
+        first_name: profileData.first_name || '',
+        last_name: profileData.last_name || '',
+        bio: profileData.bio || '',
+        linkedin_url: profileData.linkedin_url || '',
+        instagram_url: profileData.instagram_url || '',
+        phone: profileData.phone || '',
+        department: profileData.department || '',
+        position: profileData.position || ''
       });
+      return profileData;
     } catch (error) {
       console.error('Failed to fetch profile:', error);
+      return null;
     } finally {
       setLoading(false);
     }
@@ -78,9 +82,11 @@ export default function ProfileManager({ onProfileUpdate }: ProfileManagerProps)
   const handleSaveProfile = async () => {
     setSaving(true);
     try {
-      const response = await api.put('/users/profile/me', formData);
-      await fetchProfile();
-      onProfileUpdate?.(profile!);
+      await api.put('/users/profile/me', formData);
+      const updatedProfile = await fetchProfile();
+      if (updatedProfile) {
+        onProfileUpdate?.(updatedProfile);
+      }
       alert('Profile updated successfully!');
     } catch (error: any) {
       console.error('Failed to update profile:', error);
@@ -103,14 +109,34 @@ export default function ProfileManager({ onProfileUpdate }: ProfileManagerProps)
         },
       });
 
-      await fetchProfile();
-      onProfileUpdate?.(profile!);
+      const updatedProfile = await fetchProfile();
+      if (updatedProfile) {
+        onProfileUpdate?.(updatedProfile);
+      }
       alert(`${type === 'profile_picture' ? 'Profile picture' : 'Selfie'} updated successfully!`);
     } catch (error: any) {
       console.error(`Failed to upload ${type}:`, error);
       alert(`Failed to upload ${type === 'profile_picture' ? 'profile picture' : 'selfie'}. Please try again.`);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleDeletePhoto = async (type: 'profile_picture' | 'selfie') => {
+    setDeletingPhoto(type);
+    try {
+      const endpoint = type === 'profile_picture' ? '/files/profile-picture' : '/files/selfie';
+      await api.delete(endpoint);
+      const updatedProfile = await fetchProfile();
+      if (updatedProfile) {
+        onProfileUpdate?.(updatedProfile);
+      }
+      alert(`${type === 'profile_picture' ? 'Profile picture' : 'Selfie'} removed successfully!`);
+    } catch (error: any) {
+      console.error(`Failed to remove ${type}:`, error);
+      alert(`Failed to delete ${type === 'profile_picture' ? 'profile picture' : 'selfie'}. Please try again.`);
+    } finally {
+      setDeletingPhoto(null);
     }
   };
 
@@ -317,6 +343,16 @@ export default function ProfileManager({ onProfileUpdate }: ProfileManagerProps)
                   {uploading ? 'Uploading...' : 'Upload Profile Picture'}
                 </label>
               </div>
+              {profile?.profile_picture && (
+                <button
+                  type="button"
+                  onClick={() => handleDeletePhoto('profile_picture')}
+                  disabled={deletingPhoto === 'profile_picture'}
+                  className="mt-2 text-sm text-red-500 hover:text-red-600 disabled:opacity-50"
+                >
+                  {deletingPhoto === 'profile_picture' ? 'Removing...' : 'Remove Photo'}
+                </button>
+              )}
             </div>
           </div>
 
@@ -354,6 +390,16 @@ export default function ProfileManager({ onProfileUpdate }: ProfileManagerProps)
                   {uploading ? 'Uploading...' : 'Upload Selfie'}
                 </label>
               </div>
+              {profile?.selfie && (
+                <button
+                  type="button"
+                  onClick={() => handleDeletePhoto('selfie')}
+                  disabled={deletingPhoto === 'selfie'}
+                  className="mt-2 text-sm text-red-500 hover:text-red-600 disabled:opacity-50"
+                >
+                  {deletingPhoto === 'selfie' ? 'Removing...' : 'Remove Photo'}
+                </button>
+              )}
             </div>
           </div>
         </div>

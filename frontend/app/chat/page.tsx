@@ -3,11 +3,15 @@
 export const dynamic = 'force-dynamic';
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import api, { getFileUrl, markMessagesAsRead } from "../../utils/api";
 import { useWebSocket } from "../../hooks/useWebSocket";
 import { useChatData } from "../../hooks/useChatData";
 import { useMessageHandlers } from "../../hooks/useMessageHandlers";
 import { useWebSocketMessages } from "../../hooks/useWebSocketMessages";
+import { useVoiceRecording } from "../../hooks/useVoiceRecording";
+import { useRealTimeChat } from "../../hooks/useRealTimeChat";
+import { useChatMessaging } from "../../hooks/useChatMessaging";
 import FileUpload from "../../components/FileUpload";
 import { DocumentsModal } from "../../components/DocumentsModal";
 import { MediaManagerModal } from "../../components/MediaManagerModal";
@@ -20,6 +24,7 @@ import type { ApiError, FileUploadData } from "../../types/api";
 import { formatTimestamp, formatMessageDate, formatLastSeen, shouldShowDateSeparator } from "../../utils/formatUtils";
 import { getDisplayName, getInitials } from "../../utils/userUtils";
 import { notificationService } from "../../utils/notificationService";
+import { useTheme } from "../../context/ThemeContext";
 
 // Extend the Window interface to include typingTimeout
 declare global {
@@ -31,6 +36,8 @@ declare global {
 export default function ChatPage() {
   // Constants
   const myId = typeof window !== "undefined" ? localStorage.getItem("user_id") || "" : "";
+  const router = useRouter();
+  const { setTheme } = useTheme();
 
   // Chat data hook
   const {
@@ -50,11 +57,16 @@ export default function ChatPage() {
     setLastMessageStatus,
   } = useChatData();
 
+  useEffect(() => {
+    const preferredTheme = currentUser?.preferences?.theme || currentUser?.theme_preference;
+    if (preferredTheme === 'light' || preferredTheme === 'dark') {
+      setTheme(preferredTheme, { persist: false });
+    }
+  }, [currentUser?.preferences?.theme, currentUser?.theme_preference, setTheme]);
+
   // Local state
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [newMessage, setNewMessage] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
   const [otherUserTyping, setOtherUserTyping] = useState(false);
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [hiddenUnreadBadge, setHiddenUnreadBadge] = useState<{ [chatId: string]: boolean }>({});
@@ -64,19 +76,10 @@ export default function ChatPage() {
   const [showGroupManagement, setShowGroupManagement] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showSidebar, setShowSidebar] = useState(true);
-  const [replyingTo, setReplyingTo] = useState<ReplyTo | null>(null);
   const [lastSeenUpdateTime, setLastSeenUpdateTime] = useState(Date.now());
   const [showDocumentsModal, setShowDocumentsModal] = useState(false);
   const [showMediaManager, setShowMediaManager] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
-  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const discardRecordingRef = useRef(false);
-  const pointerActiveRef = useRef(false);
 
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -166,15 +169,108 @@ export default function ChatPage() {
     }
   }, [setUnreadCounts]);
 
-  const handleMessageReply = useCallback((message: Message) => {
-    const replyTo = createReplyTo(message);
-    setReplyingTo(replyTo);
-    messageInputRef.current?.focus();
-  }, [createReplyTo]);
+  // Chat messaging hook (handles sending messages, typing, etc.)
+  const {
+    newMessage,
+    setNewMessage,
+    isTyping,
+    replyingTo,
+    setReplyingTo,
+    sendMessage,
+    handleTyping,
+    handleKeyPress,
+    handleMessageReply,
+  } = useChatMessaging({
+    activeChat,
+    myId,
+    currentUser,
+    isConnected,
+    sendWSMessageRef,
+    setMessages,
+    setLastMessages,
+    setLastMessageTimestamps,
+    setError,
+  });
+
+  // Real-time chat hook (handles message loading, joining/leaving chats)
+  useRealTimeChat({
+    activeChat,
+    myId,
+    isConnected,
+    sendWSMessageRef,
+    setMessages,
+    setLastMessages,
+    markChatAsRead,
+  });
+
+  // Voice recording hook
+  const handleVoiceNoteUpload = useCallback(async (audioBlob: Blob) => {
+    if (!activeChat) return;
+
+    try {
+      const audioFile = new File([audioBlob], `voice-note-${Date.now()}.webm`, { type: 'audio/webm' });
+      const formData = new FormData();
+      formData.append('file', audioFile);
+
+      const uploadResponse = await api.post('/files/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      const fileData = uploadResponse.data;
+      const messageData: {
+        chat_id: string;
+        message: string;
+        message_type: string;
+        attachment: FileUploadData;
+        reply_to?: ReplyTo;
+      } = {
+        chat_id: activeChat.id,
+        message: '🎤 Voice note',
+        message_type: 'file',
+        attachment: { ...fileData, file_type: 'document' }
+      };
+
+      if (replyingTo) {
+        messageData.reply_to = replyingTo;
+      }
+
+      const response = await api.post('/messages/send', messageData);
+      const createdMessage = response.data;
+
+      setMessages(prev => [...prev, createdMessage].sort((a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      ));
+
+      setLastMessages(prev => ({ ...prev, [activeChat.id]: '🎤 Voice note' }));
+      setLastMessageTimestamps(prev => ({ ...prev, [activeChat.id]: createdMessage.timestamp }));
+
+      if (replyingTo) {
+        setReplyingTo(null);
+      }
+    } catch (error: unknown) {
+      const apiError = error as ApiError;
+      const errorMessage = apiError?.response?.data?.detail || 'Failed to send voice note';
+      setError(errorMessage);
+      console.error('Failed to send voice note:', error);
+    }
+  }, [activeChat, replyingTo, setMessages, setLastMessages, setLastMessageTimestamps, setError, setReplyingTo]);
+
+  const {
+    isRecordingVoice,
+    recordingTime,
+    handleVoiceButtonMouseDown,
+    handleVoiceButtonMouseUp,
+    handleVoiceButtonMouseLeave,
+    handleVoiceButtonTouchStart,
+    handleVoiceButtonTouchEnd,
+    handleVoiceButtonTouchCancel,
+  } = useVoiceRecording({ onRecordingComplete: handleVoiceNoteUpload });
 
   const handleChatDelete = useCallback(async (chatId: string) => {
     try {
-      await api.delete(`/chats/${chatId}`);
+      const response = await api.delete(`/chats/${chatId}`);
+      console.log('Chat deleted successfully:', response.data);
+      
       setChats(prev => prev.filter(chat => chat.id !== chatId));
 
       if (activeChat && activeChat.id === chatId) {
@@ -187,11 +283,30 @@ export default function ChatPage() {
         delete updated[chatId];
         return updated;
       });
-    } catch (error) {
+
+      setLastMessageTimestamps(prev => {
+        const updated = { ...prev };
+        delete updated[chatId];
+        return updated;
+      });
+
+      setUnreadCounts(prev => {
+        const updated = { ...prev };
+        delete updated[chatId];
+        return updated;
+      });
+
+      // Leave chat via WebSocket if connected
+      if (isConnected && sendWSMessageRef.current) {
+        sendWSMessageRef.current({ type: "leave_chat", chat_id: chatId });
+      }
+    } catch (error: any) {
       console.error('Failed to delete chat:', error);
-      setError('Failed to delete chat');
+      const errorMessage = error?.response?.data?.detail || error?.message || 'Failed to delete chat';
+      setError(errorMessage);
+      alert(`Failed to delete chat: ${errorMessage}`);
     }
-  }, [activeChat, setChats, setError, setLastMessages]);
+  }, [activeChat, setChats, setError, setLastMessages, setLastMessageTimestamps, setUnreadCounts, isConnected, sendWSMessageRef]);
 
   const scrollToMessage = useCallback((messageId: string) => {
     const messageElement = document.getElementById(`message-${messageId}`);
@@ -239,15 +354,18 @@ export default function ChatPage() {
       await handleWebSocketMessage(event);
     },
     onOpen: () => {
-      console.log("WebSocket connected successfully");
+      console.log("✅ WebSocket connected successfully");
       setIsConnected(true);
-      sendWSMessageRef.current = sendWSMessage as WebSocketSendMessage;
-      const token = localStorage.getItem("token");
-      if (token) {
-        api.post("/users/status/online").catch((error: unknown) => {
-          console.error("Failed to set user online:", error);
-        });
-      }
+      // Wait a bit before setting the ref to ensure connection is stable
+      setTimeout(() => {
+        sendWSMessageRef.current = sendWSMessage as WebSocketSendMessage;
+        const token = localStorage.getItem("token");
+        if (token) {
+          api.post("/users/status/online").catch((error: unknown) => {
+            console.error("Failed to set user online:", error);
+          });
+        }
+      }, 100);
     },
     onClose: () => {
       console.log("WebSocket disconnected");
@@ -273,23 +391,25 @@ export default function ChatPage() {
 
   // Auto-join all chats when WebSocket connects
   useEffect(() => {
-    if (isConnected && chats.length > 0 && sendWSMessage) {
+    if (isConnected && chats.length > 0 && sendWSMessageRef.current) {
       console.log('🔌 WebSocket connected, joining all chats...');
 
-      // Add a small delay to ensure WebSocket is fully open
+      // Add a delay to ensure WebSocket is fully ready and sendMessage is available
       const joinChats = setTimeout(() => {
-      chats.forEach(chat => {
-        sendWSMessage({
-          type: "join_chat",
-          chat_id: chat.id
-        });
-        console.log(`✅ Joined chat: ${chat.id}`);
-      });
-      }, 100);
+        if (sendWSMessageRef.current) {
+          chats.forEach(chat => {
+            sendWSMessageRef.current!({
+              type: "join_chat",
+              chat_id: chat.id
+            });
+            console.log(`✅ Joined chat: ${chat.id}`);
+          });
+        }
+      }, 300); // Increased delay to ensure connection is stable
 
       return () => clearTimeout(joinChats);
     }
-  }, [isConnected, chats, sendWSMessage]);
+  }, [isConnected, chats, sendWSMessageRef]);
 
   // Listen for service worker messages
   useEffect(() => {
@@ -351,12 +471,25 @@ export default function ChatPage() {
 
     onForegroundMessage((payload) => {
       console.log("📬 Foreground message received:", payload);
-      if (payload.notification) {
+      
+      // Always show notification for foreground messages
+      if (payload.notification || payload.data) {
+        const title = payload.notification?.title || payload.data?.title || 'New Message';
+        const body = payload.notification?.body || payload.data?.body || 'You have a new message';
+        const chatId = payload.data?.chatId || payload.data?.chat_id;
+        
+        // Show notification immediately - foreground notifications should always appear
         notificationService.showMessageNotification(
-          payload.notification.title || 'New Message',
-          payload.notification.body || 'You have a new message',
-          payload.data?.chat_id
-        );
+          title,
+          body,
+          chatId
+        ).catch(err => {
+          console.error('Error showing foreground notification:', err);
+        });
+        
+        // Also play sound and vibrate for foreground messages
+        notificationService.playNotificationSound();
+        notificationService.vibrate();
       }
     });
   }, [notificationPermission]);
@@ -438,6 +571,32 @@ export default function ChatPage() {
     loadMessages();
   }, [activeChat, setMessages, setLastMessages]);
 
+  // Reload messages when page becomes visible (window reopened)
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && activeChat) {
+        // Reload messages when page becomes visible
+        try {
+          const msgs = await api.get(`/messages/chat/${activeChat.id}`);
+          const sortedMessages = (msgs.data as Message[]).sort((a, b) =>
+            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+          );
+          setMessages(sortedMessages);
+          
+          // Mark chat as read when user returns
+          await markChatAsRead(activeChat.id);
+        } catch (e) {
+          console.error("Failed to reload messages on visibility change:", e);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [activeChat, setMessages, markChatAsRead]);
+
   // Scroll to bottom immediately when chat changes (no smooth scroll)
   useEffect(() => {
     if (activeChat && messages.length > 0) {
@@ -511,9 +670,10 @@ export default function ChatPage() {
       const apiError = e as ApiError;
 
       if (apiError?.response?.status === 401) {
-        setError("Your session has expired. Please log in again.");
-        localStorage.clear();
-        setTimeout(() => { window.location.href = "/login"; }, 2000);
+        // Don't auto-logout on 401 - session persists until explicit logout
+        const detail = apiError?.response?.data?.detail || "Failed to create chat. Please try again.";
+        setError(detail);
+        console.warn("401 error but not logging out - session persists");
       } else {
         const detail = apiError?.response?.data?.detail || "Failed to create chat";
         setError(detail);
@@ -543,138 +703,7 @@ export default function ChatPage() {
     }
   }, [setChats]);
 
-  // Improved sendMessage function that properly preserves reply data
-
-  const sendMessage = useCallback(async () => {
-  if (!newMessage.trim() || !activeChat) return;
-
-  const messageText = newMessage.trim();
-  const tempId = `temp-${Date.now()}`;
-  
-  // Store the current reply state BEFORE clearing it
-  const currentReplyTo = replyingTo;
-
-  // Create optimistic message with proper typing
-  const optimisticMessage: Message = {
-    id: tempId,
-    chat_id: activeChat.id,
-    sender_id: myId,
-    message: messageText,
-    timestamp: new Date().toISOString(),
-    message_type: "text",
-    status: "sent", // Use specific string literal type
-    reply_to: currentReplyTo ?? undefined, // Fix: ensure correct type (ReplyTo | undefined)
-  };
-  setMessages(prev => [...prev, optimisticMessage].sort((a, b) => 
-    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  ));
-
-    // Update last message
-    const currentUserName = currentUser?.first_name || currentUser?.username || 'You';
-    const previewText = activeChat.type === 'group' ? `${currentUserName}: ${messageText}` : messageText;
-    setLastMessages(prev => ({ ...prev, [activeChat.id]: previewText }));
-    setLastMessageTimestamps(prev => ({ ...prev, [activeChat.id]: optimisticMessage.timestamp }));
-
-    // IMPORTANT: Clear input and reply state AFTER creating the optimistic message
-    setNewMessage("");
-    setReplyingTo(null);
-
-    // Stop typing indicator
-    setIsTyping(false);
-    if (isConnected) {
-      sendWSMessage({ type: "typing", chat_id: activeChat.id, is_typing: false });
-    }
-
-    // Send via WebSocket
-    if (isConnected) {
-      sendWSMessage({
-        type: "message",
-        chat_id: activeChat.id,
-        message: messageText,
-        message_type: "text",
-        timestamp: optimisticMessage.timestamp,
-        temp_id: tempId,
-        reply_to: currentReplyTo  // Use the stored value here too
-      });
-    }
-
-    // Send to API
-    const payload: {
-      chat_id: string;
-      message: string;
-      message_type: string;
-      reply_to?: ReplyTo;
-    } = {
-      chat_id: activeChat.id,
-      message: messageText,
-      message_type: "text"
-    }
-
-    // Only include reply_to if it exists
-    if (currentReplyTo) {
-      payload.reply_to = currentReplyTo;
-    }
-
-    api.post("/messages/send", payload)
-      .then((response) => {
-        const sentMessage = response.data;
-        setMessages(prev => {
-          const filtered = prev.filter(msg => msg.id !== tempId);
-          return [...filtered, sentMessage].sort((a, b) =>
-            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-          );
-        });
-
-        // Last message status is handled by WebSocket
-      })
-      .catch((error: unknown) => {
-        console.error("Error sending message:", error);
-        setMessages(prev => prev.map(msg =>
-          msg.id === tempId ? { ...msg, status: 'error' as const } : msg
-        ));
-
-        const apiError = error as ApiError;
-        if (apiError?.response?.status === 401) {
-          setError("Your session has expired. Please log in again.");
-          localStorage.clear();
-          setTimeout(() => { window.location.href = "/login"; }, 2000);
-        } else {
-          const detail = apiError?.response?.data?.detail || "Failed to send message";
-          setError(detail);
-        }
-      });
-  }, [newMessage, activeChat, myId, currentUser, replyingTo, isConnected, sendWSMessage, setMessages, setLastMessages, setLastMessageTimestamps, setError]);
-
-  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  }, [sendMessage]);
-
-  const handleTyping = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setNewMessage(e.target.value);
-
-    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-      setShowSidebar(false);
-    }
-
-    if (!isTyping && activeChat && isConnected) {
-      setIsTyping(true);
-      sendWSMessage({ type: "typing", chat_id: activeChat.id, is_typing: true });
-    }
-
-    if (window.typingTimeout) {
-      clearTimeout(window.typingTimeout);
-    }
-
-    window.typingTimeout = setTimeout(() => {
-      if (isConnected && activeChat) {
-        sendWSMessage({ type: "typing", chat_id: activeChat.id, is_typing: false });
-      }
-      setIsTyping(false);
-    }, 1000);
-  }, [isTyping, activeChat, isConnected, sendWSMessage]);
+  // Message sending, typing, and keyboard handling are now in useChatMessaging hook
 
   const handleFileUpload = useCallback(async (fileData: FileUploadData) => {
     // Don't close file upload immediately - allow multiple files
@@ -734,167 +763,7 @@ export default function ChatPage() {
     }
   }, [activeChat, replyingTo, setMessages, setLastMessages, setLastMessageTimestamps, setError, setReplyingTo]);
 
-  const handleVoiceNoteUpload = useCallback(async (audioBlob: Blob) => {
-    if (!activeChat) return;
-
-    try {
-      // Convert audio blob to file
-      const audioFile = new File([audioBlob], `voice-note-${Date.now()}.webm`, { type: 'audio/webm' });
-      
-      // Upload audio file
-      const formData = new FormData();
-      formData.append('file', audioFile);
-
-      const uploadResponse = await api.post('/files/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      const fileData = uploadResponse.data;
-
-      // Send as message with attachment
-      const messageData: {
-        chat_id: string;
-        message: string;
-        message_type: string;
-        attachment: FileUploadData;
-        reply_to?: ReplyTo;
-      } = {
-        chat_id: activeChat.id,
-        message: '🎤 Voice note',
-        message_type: 'file',
-        attachment: {
-          ...fileData,
-          file_type: 'document' // Voice notes are treated as documents
-        }
-      };
-
-      if (replyingTo) {
-        messageData.reply_to = replyingTo;
-      }
-
-      const response = await api.post('/messages/send', messageData);
-      const createdMessage = response.data;
-
-      setMessages(prev => [...prev, createdMessage].sort((a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-      ));
-
-      setLastMessages(prev => ({ ...prev, [activeChat.id]: '🎤 Voice note' }));
-      setLastMessageTimestamps(prev => ({ ...prev, [activeChat.id]: createdMessage.timestamp }));
-
-      if (replyingTo) {
-        setReplyingTo(null);
-      }
-    } catch (error: unknown) {
-      const apiError = error as ApiError;
-      const errorMessage = apiError?.response?.data?.detail || 'Failed to send voice note';
-      setError(errorMessage);
-      console.error('Failed to send voice note:', error);
-    }
-  }, [activeChat, replyingTo, setMessages, setLastMessages, setLastMessageTimestamps, setError, setReplyingTo]);
-
-  const stopVoiceRecording = useCallback((cancel = false) => {
-    discardRecordingRef.current = cancel;
-    pointerActiveRef.current = false;
-
-    if (recordingTimerRef.current) {
-      clearInterval(recordingTimerRef.current);
-      recordingTimerRef.current = null;
-    }
-
-    if (isRecordingVoice) {
-      setIsRecordingVoice(false);
-    }
-    setRecordingTime(0);
-
-    const recorder = mediaRecorderRef.current;
-    if (recorder && recorder.state === 'recording') {
-      try {
-        recorder.stop();
-      } catch (error) {
-        console.error('Failed to stop MediaRecorder:', error);
-      }
-    } else if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach(track => track.stop());
-      mediaStreamRef.current = null;
-    }
-  }, [isRecordingVoice]);
-
-  const startVoiceRecording = useCallback(async () => {
-    if (isRecordingVoice) {
-      return;
-    }
-
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-      alert('Microphone access is not supported in this environment.');
-      return;
-    }
-
-    if (typeof window !== 'undefined' && typeof MediaRecorder === 'undefined') {
-      alert('Voice notes are not supported in this browser.');
-      return;
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaStreamRef.current = stream;
-      discardRecordingRef.current = false;
-
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event: BlobEvent) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        const activeStream = mediaStreamRef.current;
-        mediaStreamRef.current = null;
-
-        if (activeStream) {
-          activeStream.getTracks().forEach(track => track.stop());
-        }
-
-        mediaRecorderRef.current = null;
-
-        const shouldDiscard = discardRecordingRef.current;
-        discardRecordingRef.current = false;
-
-        if (shouldDiscard) {
-          audioChunksRef.current = [];
-          return;
-        }
-
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        audioChunksRef.current = [];
-
-        if (audioBlob.size > 0) {
-          await handleVoiceNoteUpload(audioBlob);
-        }
-      };
-
-      mediaRecorder.start();
-      setIsRecordingVoice(true);
-      setRecordingTime(0);
-
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
-      }, 1000);
-
-      if (!pointerActiveRef.current) {
-        stopVoiceRecording(discardRecordingRef.current);
-      }
-    } catch (error) {
-      console.error('Error accessing microphone:', error);
-      alert('Microphone access denied. Please allow microphone access to record voice notes.');
-      stopVoiceRecording(true);
-    }
-  }, [handleVoiceNoteUpload, isRecordingVoice, stopVoiceRecording]);
+  // Voice recording functions are now handled by useVoiceRecording hook (defined above at line 258)
 
       // Unified sorted chat list (groups + users) sorted by most recent messages
       const sortedChats = useMemo(() => {
@@ -999,6 +868,14 @@ export default function ChatPage() {
       }, [chats, users, myId, searchQuery, lastMessageTimestamps]);
 
       const canCreateGroup = users.length >= 3;
+      const currentUserDisplayName = useMemo(
+        () => (currentUser ? getDisplayName(currentUser) : "Messages"),
+        [currentUser]
+      );
+      const currentUserSubtitle = useMemo(() => {
+        if (!currentUser) return "Team Chat";
+        return currentUser.role === 'admin' ? 'Admin workspace' : 'Team Chat';
+      }, [currentUser]);
 
       // Don't block UI with loading screen - show sidebar immediately
       // Data will load in background and populate as it arrives
@@ -1186,8 +1063,11 @@ export default function ChatPage() {
                     {currentUser && (
                       <div 
                         className="relative cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={() => setShowDocumentsModal(true)}
-                        title="View shared documents"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          router.push('/profile');
+                        }}
+                        title="Open profile"
                       >
                         {currentUser.profile_picture ? (
                           <Image
@@ -1206,22 +1086,45 @@ export default function ChatPage() {
                       </div>
                     )}
                     <div className="ml-1 sm:ml-2">
-                      <h1 className="text-base sm:text-lg font-bold text-[var(--text-primary)] tracking-tight">Messages</h1>
+                      <h1 className="text-base sm:text-lg font-bold text-[var(--text-primary)] tracking-tight">
+                        {currentUserDisplayName}
+                      </h1>
                       <p className="text-[var(--text-muted)] text-[11px] sm:text-xs font-medium">
-                        {currentUser?.first_name ? `Hi, ${currentUser.first_name}` : 'Team Chat'}
+                        {currentUserSubtitle}
                       </p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => window.location.href = '/settings'}
-                    className="p-2 sm:p-2.5 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--secondary-hover)] rounded-lg transition-all duration-200"
-                    title="Settings"
-                  >
-                    <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => router.push('/tickets')}
+                      className="p-2 sm:p-2.5 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--secondary-hover)] rounded-lg transition-all duration-200 relative"
+                      title="Your Tickets"
+                    >
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => setShowDocumentsModal(true)}
+                      className="p-2 sm:p-2.5 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--secondary-hover)] rounded-lg transition-all duration-200"
+                      title="Shared files"
+                    >
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-3.866 0-7 1.79-7 4v4a1 1 0 001 1h12a1 1 0 001-1v-4c0-2.21-3.134-4-7-4z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12V8a7 7 0 0114 0v4" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => window.location.href = '/settings'}
+                      className="p-2 sm:p-2.5 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--secondary-hover)] rounded-lg transition-all duration-200"
+                      title="Settings"
+                    >
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1253,9 +1156,9 @@ export default function ChatPage() {
                 </div>
               </div>
 
-              {/* Create Group Button */}
-              {canCreateGroup && (
-                <div className="px-3 sm:px-4 py-1.5 sm:py-2 border-b border-[var(--border)]">
+              {/* Action Buttons */}
+              <div className="px-3 sm:px-4 py-1.5 sm:py-2 border-b border-[var(--border)] space-y-2">
+                {canCreateGroup && (
                   <button
                     onClick={() => window.location.href = '/create-group'}
                     className="w-full px-3 py-2 bg-[var(--accent)] text-[var(--text-inverse)] rounded-lg hover:bg-[var(--accent-hover)] flex items-center justify-center text-xs font-semibold transition-all duration-200 shadow-sm"
@@ -1265,8 +1168,17 @@ export default function ChatPage() {
                     </svg>
                     Create Group
                   </button>
-                </div>
-              )}
+                )}
+                <button
+                  onClick={() => router.push('/tickets/raise')}
+                  className="w-full px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg flex items-center justify-center text-xs font-semibold transition-all duration-200 shadow-sm"
+                >
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Create Ticket
+                </button>
+              </div>
 
               {/* Chat List - Unified (Groups + Users sorted by recent messages) */}
               <div className="flex-1 overflow-y-auto scrollbar-thin">
@@ -1610,27 +1522,13 @@ export default function ChatPage() {
                       {/* Voice Note Button */}
                       <button
                         type="button"
-                        onPointerDown={(event) => {
-                          if (event.pointerType === 'mouse' && event.button !== 0) {
-                            return;
-                          }
-                          event.preventDefault();
-                          pointerActiveRef.current = true;
-                          void startVoiceRecording();
-                        }}
-                        onPointerUp={() => {
-                          pointerActiveRef.current = false;
-                          stopVoiceRecording(false);
-                        }}
-                        onPointerLeave={() => {
-                          pointerActiveRef.current = false;
-                          stopVoiceRecording(true);
-                        }}
-                        onPointerCancel={() => {
-                          pointerActiveRef.current = false;
-                          stopVoiceRecording(true);
-                        }}
-                        className={`p-2 sm:p-3 rounded-lg flex-shrink-0 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50 focus:ring-offset-1 ${
+                        onMouseDown={handleVoiceButtonMouseDown}
+                        onMouseUp={handleVoiceButtonMouseUp}
+                        onMouseLeave={handleVoiceButtonMouseLeave}
+                        onTouchStart={handleVoiceButtonTouchStart}
+                        onTouchEnd={handleVoiceButtonTouchEnd}
+                        onTouchCancel={handleVoiceButtonTouchCancel}
+                        className={`p-2 sm:p-3 rounded-lg flex-shrink-0 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50 focus:ring-offset-1 select-none ${
                           isRecordingVoice
                             ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse'
                             : 'text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--secondary-hover)]'

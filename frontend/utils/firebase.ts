@@ -114,27 +114,33 @@ export const onForegroundMessage = (callback: (payload: any) => void) => {
       console.log('📬 Foreground message received:', payload);
       console.log('⏰ Timestamp:', new Date().toISOString());
       
-      // Show notification immediately even when app is in foreground
+      // ALWAYS show notification immediately even when app is in foreground
+      // This ensures users never miss messages
       if (Notification.permission === 'granted') {
         const notificationTitle = payload.notification?.title || payload.data?.title || 'New Message';
         const notificationBody = payload.notification?.body || payload.data?.body || 'You have a new message';
         const notificationIcon = payload.notification?.icon || payload.data?.icon || '/icon-192.png';
+        const chatId = payload.data?.chatId || payload.data?.chat_id;
         
         // Create notification options with proper TypeScript typing
         const notificationOptions: ExtendedNotificationOptions = {
           body: notificationBody,
           icon: notificationIcon,
           badge: '/icon-192.png',
-          tag: payload.data?.chatId || payload.data?.chat_id || 'chatapp-message',
+          tag: chatId || 'chatapp-message',
           requireInteraction: false,
           silent: false, // Enable sound
           vibrate: [200, 100, 200, 100, 200], // TypeScript error fixed
-          renotify: true, // TypeScript error fixed
-          data: payload.data,
+          renotify: true, // Show notification even if one with same tag exists
+          data: {
+            ...payload.data,
+            chatId: chatId,
+            click_action: `/chat${chatId ? `?chat=${chatId}` : ''}`
+          },
           timestamp: Date.now()
         };
         
-        // Create and show notification INSTANTLY
+        // Create and show notification INSTANTLY - always show, even in foreground
         const notification = new Notification(notificationTitle, notificationOptions);
 
         // Handle notification click

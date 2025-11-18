@@ -32,6 +32,10 @@ def get_admin_profile(current_admin=Depends(get_current_admin)):
     # Convert ObjectId to string and remove sensitive data
     admin["_id"] = str(admin["_id"])
     admin.pop("password", None)  # Remove password from response
+    preferences = admin.get("preferences") or {}
+    theme_preference = preferences.get("theme") or admin.get("theme_preference") or "light"
+    admin["preferences"] = {**preferences, "theme": theme_preference}
+    admin["theme_preference"] = theme_preference
     return admin
 
 # Update admin profile

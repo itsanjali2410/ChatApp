@@ -12,6 +12,11 @@ export type User = {
   current_chat_id?: string;
   role?: string;
   last_seen?: string;
+  phone?: string;
+  preferences?: {
+    theme?: 'light' | 'dark';
+  };
+  theme_preference?: 'light' | 'dark';
 };
 
 export type Chat = {

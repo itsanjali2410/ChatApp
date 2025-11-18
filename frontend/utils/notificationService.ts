@@ -139,17 +139,9 @@ export class NotificationService {
     message: string,
     chatId: string
   ): Promise<void> {
-    // Always show notifications when page is hidden/offscreen
-    const isPageHidden = typeof document !== 'undefined' && 
-      (document.hidden === true || document.visibilityState !== 'visible');
-    
-    const isDesktop = window.innerWidth >= 1024;
-    const shouldShow = !isDesktop || !this.isAppFocused || isPageHidden;
-    
-    if (!shouldShow && isDesktop) {
-      console.log('🔕 Skipping message notification - app is focused and visible on desktop');
-      return;
-    }
+    // ALWAYS show notifications - even when app is in foreground
+    // This ensures users get notified of new messages regardless of app state
+    const shouldShow = true; // Always show notifications
     
     const title = `New message from ${senderName}`;
     const body = message.length > 100 ? message.substring(0, 100) + '...' : message;
@@ -204,17 +196,9 @@ export class NotificationService {
     fileName: string,
     chatId: string
   ): Promise<void> {
-    // Always show notifications when page is hidden/offscreen
-    const isPageHidden = typeof document !== 'undefined' && 
-      (document.hidden === true || document.visibilityState !== 'visible');
-    
-    const isDesktop = window.innerWidth >= 1024;
-    const shouldShow = !isDesktop || !this.isAppFocused || isPageHidden;
-    
-    if (!shouldShow && isDesktop) {
-      console.log('🔕 Skipping file notification - app is focused and visible on desktop');
-      return;
-    }
+    // ALWAYS show notifications - even when app is in foreground
+    // This ensures users get notified of new files regardless of app state
+    const shouldShow = true; // Always show notifications
     
     const title = `File from ${senderName}`;
     const body = `📎 ${fileName}`;

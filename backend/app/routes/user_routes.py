@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from werkzeug.security import generate_password_hash
-from ..models.user_model import User , FCMTokenUpdate
+from ..models.user_model import User, FCMTokenUpdate, ThemePreferenceUpdate
 from bson import ObjectId, Code
 
 from datetime import datetime
@@ -8,6 +8,20 @@ from ..services.user_service import users_collection
 from ..services import user_service
 from ..services import org_service
 from ..dependencies.auth import get_current_user, get_current_admin
+
+def _serialize_user(user: dict) -> dict:
+    """Normalize user/admin payloads for frontend consumption."""
+    if not user:
+        return {}
+    serialized = {**user}
+    if "_id" in serialized:
+        serialized["_id"] = str(serialized["_id"])
+    serialized.pop("password", None)
+    preferences = serialized.get("preferences") or {}
+    theme_preference = preferences.get("theme") or serialized.get("theme_preference") or "light"
+    serialized["preferences"] = {**preferences, "theme": theme_preference}
+    serialized["theme_preference"] = theme_preference
+    return serialized
 
 router = APIRouter(prefix="/users", tags=["Users"])
 # Create a new user
@@ -29,27 +43,96 @@ def list_all_users():
     return users
 
 # Update current user profile (requires auth)
-@router.get("/profile/me")  # ✅ GET method
-def get_my_profile(current_user=Depends(get_current_user)):  # ✅ No extra parameters
+@router.get("/profile/me")
+def get_my_profile(current_user=Depends(get_current_user)):
     from ..services.user_service import get_user_by_email
     from ..services.admin_service import get_admin_by_email
-    
+
     user_email = current_user.get("sub")
     user = get_user_by_email(user_email) or get_admin_by_email(user_email)
-    
+
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+
+    return _serialize_user(user)
+
+@router.put("/profile/me")
+def update_my_profile(updates: dict, current_user=Depends(get_current_user)):
+    user_email = current_user.get("sub")
+    if not user_email:
+        raise HTTPException(status_code=400, detail="User email missing")
+
+    allowed_fields = {
+        "username",
+        "first_name",
+        "last_name",
+        "bio",
+        "phone",
+        "department",
+        "position",
+        "linkedin_url",
+        "instagram_url",
+    }
+    filtered_updates = {k: v for k, v in updates.items() if k in allowed_fields}
+    if not filtered_updates:
+        raise HTTPException(status_code=400, detail="No valid fields to update")
+
+    role = current_user.get("role", "user")
+
+    if role == "admin":
+        from ..services.admin_service import get_admin_by_email, update_admin
+
+        admin = get_admin_by_email(user_email)
+        if not admin:
+            raise HTTPException(status_code=404, detail="Admin not found")
+
+        updated = update_admin(str(admin["_id"]), filtered_updates)
+        if not updated:
+            raise HTTPException(status_code=500, detail="Failed to update admin profile")
+
+        refreshed = get_admin_by_email(user_email)
+        return _serialize_user(refreshed)
+
+    result = user_service.update_user(user_email, filtered_updates)
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    refreshed_user = user_service.get_user_by_email(user_email)
+    return _serialize_user(refreshed_user)
+
+@router.put("/preferences/theme")
+def update_theme_preference(payload: ThemePreferenceUpdate, current_user=Depends(get_current_user)):
+    user_email = current_user.get("sub")
+    if not user_email:
+        raise HTTPException(status_code=400, detail="User email missing")
+
+    role = current_user.get("role", "user")
+    theme_updates = {
+        "preferences.theme": payload.theme,
+        "theme_preference": payload.theme
+    }
+
+    if role == "admin":
+        from ..services.admin_service import get_admin_by_email, update_admin
+
+        admin = get_admin_by_email(user_email)
+        if not admin:
+            raise HTTPException(status_code=404, detail="Admin not found")
+
+        updated = update_admin(str(admin["_id"]), theme_updates)
+        if not updated:
+            raise HTTPException(status_code=500, detail="Failed to update theme preference")
+        refreshed = get_admin_by_email(user_email)
+    else:
+        result = user_service.update_user(user_email, theme_updates)
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="User not found")
+        refreshed = user_service.get_user_by_email(user_email)
+
     return {
-        "_id": str(user["_id"]),
-        "email": user.get("email"),
-        "username": user.get("username"),
-        "first_name": user.get("first_name"),
-        "last_name": user.get("last_name"),
-        "profile_picture": user.get("profile_picture"),
-        "role": user.get("role", "user"),
-        "is_online": user.get("is_online", False),
-        "organization_id": user.get("organization_id")
+        "success": True,
+        "theme": payload.theme,
+        "profile": _serialize_user(refreshed)
     }
 
 
