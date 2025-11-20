@@ -4,15 +4,6 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  output: 'export',
-  distDir: 'out',
-  images: {
-    unoptimized: true,
-  },
-  trailingSlash: true,
-  experimental: {
-    serverMinification: true,
-  },
   async headers() {
     return [
       {
