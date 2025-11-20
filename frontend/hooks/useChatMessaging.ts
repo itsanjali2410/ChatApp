@@ -161,9 +161,14 @@ export const useChatMessaging = ({
     }
   }, [sendMessage]);
 
-  const handleMessageReply = useCallback((message: Message, users: User[]) => {
-    const sender = users.find(u => u._id === message.sender_id);
-    const senderName = sender ? (sender.first_name || sender.username || 'Unknown') : 'Unknown User';
+  const handleMessageReply = useCallback((message: Message, users?: User[]) => {
+    const safeUsers = Array.isArray(users) ? users : [];
+    const sender =
+      safeUsers.find(u => u._id === message.sender_id) || null;
+    const senderName =
+      sender?.first_name ||
+      sender?.username ||
+      (message.sender_name ?? 'Unknown User');
     
     const replyTo: ReplyTo = {
       message_id: message.id,

@@ -11,37 +11,8 @@ const instance = axios.create({
 
 // Function to check if token is valid (not expired)
 // NOTE: We don't auto-logout on expiration - session persists until explicit logout
-const isTokenValid = (token: string): boolean => {
-  try {
-    if (!token) return false;
-    
-    // Decode JWT token (basic check)
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    
-    // Always return true if token exists - don't check expiration
-    // Session should persist until user explicitly logs out
-    return true;
-  } catch (error) {
-    console.error("Error validating token:", error);
-    return false;
-  }
-};
 
 // Function to check if token needs refresh (expires within 1 hour)
-const needsTokenRefresh = (token: string): boolean => {
-  try {
-    if (!token) return false;
-    
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    const currentTime = Math.floor(Date.now() / 1000);
-    const expiresIn = payload.exp - currentTime;
-    
-    // Refresh if token expires within 1 hour (3600 seconds)
-    return expiresIn > 0 && expiresIn < 3600;
-  } catch (error) {
-    return false;
-  }
-};
 
 instance.interceptors.request.use(async (config) => {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
@@ -50,7 +21,7 @@ instance.interceptors.request.use(async (config) => {
     // Always attach token - don't check expiration
     // Session persists until explicit logout
     config.headers = config.headers || {};
-    (config.headers as any)["Authorization"] = `Bearer ${token}`;
+    (config.headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
   } else {
     console.log("No token found in localStorage");
   }
@@ -120,8 +91,20 @@ export const updateMessageStatus = async (messageId: string, status: string) => 
 import type { Ticket, TicketCreate, TicketUpdate } from '../types/ticket';
 
 export const createTicket = async (ticketData: TicketCreate): Promise<Ticket> => {
-  const response = await instance.post("/tickets/create", ticketData);
-  return response.data;
+  console.log('API: Creating ticket with data:', JSON.stringify(ticketData, null, 2));
+  try {
+    const response = await instance.post("/tickets/create", ticketData);
+    console.log('API: Ticket created successfully:', response.data);
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = error as { response?: { data?: unknown; status?: number } };
+    console.error('API: Error creating ticket:', {
+      status: axiosError?.response?.status,
+      data: axiosError?.response?.data,
+      fullError: error
+    });
+    throw error;
+  }
 };
 
 export const getTickets = async (): Promise<Ticket[]> => {
@@ -149,7 +132,7 @@ export const addTicketNote = async (ticketId: string, noteContent: string): Prom
   return response.data;
 };
 
-export const addTicketMessage = async (ticketId: string, messageData: any): Promise<Ticket> => {
+export const addTicketMessage = async (ticketId: string, messageData: never): Promise<Ticket> => {
   const response = await instance.post(`/tickets/${ticketId}/messages`, messageData);
   return response.data;
 };

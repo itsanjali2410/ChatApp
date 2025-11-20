@@ -193,10 +193,9 @@ export default function RaiseTicketPage() {
         infants: infants,
         body: formData.body.trim(),
         travelDate: travelDateISO,
-        pax: adults + children, // For backward compatibility
+        pax: adults + children, 
       };
       
-      // Add optional fields only if they have values
       if (formData.pocId) {
         ticketData.pocId = formData.pocId;
       }

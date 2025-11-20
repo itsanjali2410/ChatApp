@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { getTickets, getMyTickets, type Ticket } from '../../utils/api';
-import { TicketStatus } from '../../types/ticket';
-import api from '../../utils/api';
+import { getTickets, getMyTickets } from '../../utils/api';
+import { TicketStatus, type Ticket } from '../../types/ticket';
+import { useWebSocket } from '../../hooks/useWebSocket';
+import { notificationService } from '../../utils/notificationService';
 
 const StatusBadge: React.FC<{ status: TicketStatus }> = ({ status }) => {
   const baseClasses = "px-3 py-1 text-xs font-semibold rounded-full inline-block";
@@ -28,7 +29,7 @@ export default function TicketsPage() {
   const [viewMode, setViewMode] = useState<'all' | 'my'>('all');
   const myId = typeof window !== "undefined" ? localStorage.getItem("user_id") || "" : "";
   
-  const loadTickets = async () => {
+  const loadTickets = useCallback(async () => {
     try {
       setLoading(true);
       const data = viewMode === 'all' ? await getTickets() : await getMyTickets();
@@ -39,36 +40,40 @@ export default function TicketsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [viewMode]);
   
   // WebSocket for real-time ticket updates
-  const { isConnected } = useWebSocket({
-    userId: myId,
+  useWebSocket({
+    url: `/ws/${myId}`,
     onMessage: (event: MessageEvent) => {
-      const data = JSON.parse(event.data);
-      
-      if (data.type === "ticket_created" || data.type === "ticket_updated" || data.type === "ticket_message_added") {
-        const ticket: Ticket = data.ticket;
+      try {
+        const data = JSON.parse(event.data);
         
-        // Show notification
-        notificationService.showNotification(
-          data.type === "ticket_created" ? "New Ticket Created" : 
-          data.type === "ticket_message_added" ? "New Message on Ticket" : "Ticket Updated",
-          {
-            body: `${ticket.name} - ${ticket.status}`,
-            data: { ticketId: ticket._id || ticket.id, url: `/tickets/${ticket._id || ticket.id}` }
-          }
-        );
-        
-        // Reload tickets
-        loadTickets();
+        if (data.type === "ticket_created" || data.type === "ticket_updated" || data.type === "ticket_message_added") {
+          const ticket: Ticket = data.ticket;
+          
+          // Show notification
+          notificationService.showNotification(
+            data.type === "ticket_created" ? "New Ticket Created" : 
+            data.type === "ticket_message_added" ? "New Message on Ticket" : "Ticket Updated",
+            {
+              body: `${ticket.name} - ${ticket.status}`,
+              data: { ticketId: ticket._id || ticket.id, url: `/tickets/${ticket._id || ticket.id}` }
+            }
+          );
+          
+          // Reload tickets
+          loadTickets();
+        }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
       }
     }
   });
 
   useEffect(() => {
     loadTickets();
-  }, [viewMode]);
+  }, [loadTickets]);
 
   const sortedAndFilteredTickets = useMemo(() => {
     let sortableTickets = [...tickets];
@@ -81,6 +86,11 @@ export default function TicketsPage() {
       sortableTickets.sort((a, b) => {
         const aVal = a[sortConfig.key];
         const bVal = b[sortConfig.key];
+        
+        // Handle undefined values
+        if (aVal === undefined && bVal === undefined) return 0;
+        if (aVal === undefined) return 1;
+        if (bVal === undefined) return -1;
         
         if (aVal < bVal) {
           return sortConfig.direction === 'asc' ? -1 : 1;
