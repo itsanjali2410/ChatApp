@@ -67,3 +67,19 @@ export interface TicketUpdate {
   assigned_to?: string;
 }
 
+export interface TicketMessageCreate {
+  content: string;
+  attachment?: {
+    name: string;
+    url: string;
+  };
+}
+
+export interface TicketMessageCreate {
+  content: string;
+  attachment?: {
+    name: string;
+    url: string;
+  };
+}
+

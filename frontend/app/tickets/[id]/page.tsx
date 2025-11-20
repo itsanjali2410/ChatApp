@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { 
   getTicket, 
@@ -8,8 +8,7 @@ import {
   addTicketNote, 
   addTicketMessage 
 } from '../../../utils/api';
-import { Ticket, TicketStatus } from '../../../types/ticket';
-import { getFileUrl } from '../../../utils/api';
+import { Ticket, TicketStatus, type TicketMessageCreate } from '../../../types/ticket';
 
 const StatusBadge: React.FC<{ status: TicketStatus; large?: boolean }> = ({ status, large = false }) => {
   const baseClasses = large 
@@ -42,11 +41,7 @@ export default function TicketDetailsPage() {
   const [attachment, setAttachment] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    loadTicket();
-  }, [ticketId]);
-
-  const loadTicket = async () => {
+  const loadTicket = useCallback(async () => {
     try {
       setLoading(true);
       const data = await getTicket(ticketId);
@@ -56,7 +51,11 @@ export default function TicketDetailsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [ticketId]);
+
+  useEffect(() => {
+    void loadTicket();
+  }, [loadTicket]);
 
   const handleAddNote = async () => {
     if (!newNote.trim() || !ticket) return;
@@ -79,8 +78,8 @@ export default function TicketDetailsPage() {
     
     try {
       setSubmitting(true);
-      const messageData: any = {
-        content: newMessage,
+      const messageData: TicketMessageCreate = {
+        content: newMessage.trim(),
       };
       
       if (attachment) {

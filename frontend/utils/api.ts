@@ -88,7 +88,7 @@ export const updateMessageStatus = async (messageId: string, status: string) => 
 };
 
 // Ticket API functions
-import type { Ticket, TicketCreate, TicketUpdate } from '../types/ticket';
+import type { Ticket, TicketCreate, TicketUpdate, TicketMessageCreate } from '../types/ticket';
 
 export const createTicket = async (ticketData: TicketCreate): Promise<Ticket> => {
   console.log('API: Creating ticket with data:', JSON.stringify(ticketData, null, 2));
@@ -132,7 +132,7 @@ export const addTicketNote = async (ticketId: string, noteContent: string): Prom
   return response.data;
 };
 
-export const addTicketMessage = async (ticketId: string, messageData: never): Promise<Ticket> => {
+export const addTicketMessage = async (ticketId: string, messageData: TicketMessageCreate): Promise<Ticket> => {
   const response = await instance.post(`/tickets/${ticketId}/messages`, messageData);
   return response.data;
 };
