@@ -191,8 +191,10 @@ app.include_router(router)
 # WebSocket endpoint for real-time messaging
 @app.websocket("/ws/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
-    await websocket.accept()
-    
+    logger = logging.getLogger("chatapp.websocket.endpoint")
+    user_role = None
+    connected = False
+    payload = None
     # Get token from query parameters
     query_params = websocket.query_params
     token = query_params.get("token")
@@ -215,6 +217,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
         return
     
     await manager.connect(websocket, user_id)
+    connected = True
     
     # Set user as online when they connect
     from .services.user_service import update_user_by_id
@@ -237,17 +240,18 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
     
     try:
         while True:
-            # Receive message from client
             data = await websocket.receive_text()
             message_data = json.loads(data)
-            
             message_type = message_data.get("type")
+
+            if message_type == "pong":
+                manager.record_pong(user_id)
+                continue
             
             if message_type == "join_chat":
                 chat_id = message_data.get("chat_id")
-                print(f"🔌 User {user_id} joining chat {chat_id}")
+                logger.debug("User %s joining chat %s", user_id, chat_id)
                 await manager.join_chat(user_id, chat_id)
-                print(f"✅ User {user_id} successfully joined chat {chat_id}")
                 # Send confirmation back to client
                 await websocket.send_text(json.dumps({
                     "type": "joined_chat",
@@ -279,9 +283,6 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                 chat_id = message_data.get("chat_id")
                 message_content = message_data.get("message")
                 
-                print(f"📤 Broadcasting message to chat {chat_id} from user {user_id}")
-                print(f"📊 Connected users in chat: {manager.get_connected_users_in_chat(chat_id)}")
-                
                 # Broadcast to all users in the chat (including sender for optimization)
                 broadcast_data = {
                     "type": "new_message",
@@ -293,9 +294,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                     "attachment": message_data.get("attachment"),
                     "reply_to": message_data.get("reply_to")  # Include reply_to in broadcast
                 }
-                print(f"📡 Broadcasting data: {broadcast_data}")
                 await manager.broadcast_to_chat(broadcast_data, chat_id, exclude_user=user_id)
-                print(f"✅ Broadcast complete for chat {chat_id}")
                 
             elif message_type == "mark_delivered":
                 # Handle marking messages as delivered
@@ -340,7 +339,10 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                 }, chat_id, exclude_user=user_id)
                 
     except WebSocketDisconnect:
-        # Set user as offline when they disconnect
+        logger.info("WebSocket disconnected for user %s", user_id)
+    except Exception as exc:
+        logger.exception("Unexpected error in websocket for user %s: %s", user_id, exc)
+    finally:
         if user_role == "admin":
             update_admin(user_id, {
                 "is_online": False,
@@ -355,7 +357,8 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                 "is_typing": False,
                 "current_chat_id": None
             })
-        manager.disconnect(user_id)
+        if connected:
+            manager.disconnect(user_id)
 
 # Logout endpoint clears cookie session
 @app.post("/auth/logout")

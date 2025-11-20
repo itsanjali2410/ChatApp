@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from 'react';
 import api from '../utils/api';
 import type { Chat, Message, ReplyTo, User } from '../types/chat';
 import type { WebSocketSendMessage } from '../types/websocket';
+import type { ApiError } from '../types/api';
 
 interface UseChatMessagingOptions {
   activeChat: Chat | null;
@@ -114,20 +115,22 @@ export const useChatMessaging = ({
           new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
         );
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error sending message:", error);
-      setMessages(prev => prev.map(msg =>
+      setMessages(prev => prev.map(msg =>   
         msg.id === tempId ? { ...msg, status: 'error' as const } : msg
       ));
 
-      if (error?.response?.status === 401) {
+      const apiError = error as ApiError;
+
+      if (apiError?.response?.status === 401) {
         // Don't auto-logout on 401 - session persists until explicit logout
         // Just show error message
-        const detail = error?.response?.data?.detail || "Failed to send message. Please try again.";
+        const detail = apiError?.response?.data?.detail || "Failed to send message. Please try again.";
         setError(detail);
         console.warn("401 error but not logging out - session persists");
       } else {
-        const detail = error?.response?.data?.detail || "Failed to send message";
+        const detail = apiError?.response?.data?.detail || "Failed to send message";
         setError(detail);
       }
     }
@@ -168,7 +171,7 @@ export const useChatMessaging = ({
     const senderName =
       sender?.first_name ||
       sender?.username ||
-      (message.sender_name ?? 'Unknown User');
+      'Unknown User';
     
     const replyTo: ReplyTo = {
       message_id: message.id,

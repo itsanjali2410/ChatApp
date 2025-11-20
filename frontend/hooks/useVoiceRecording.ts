@@ -2,6 +2,8 @@
 
 import { useState, useRef, useCallback } from 'react';
 
+type RecorderErrorEvent = Event & { error?: DOMException };
+
 interface UseVoiceRecordingOptions {
   onRecordingComplete: (audioBlob: Blob) => Promise<void>;
 }
@@ -113,7 +115,7 @@ export const useVoiceRecording = ({ onRecordingComplete }: UseVoiceRecordingOpti
         }
       };
 
-      mediaRecorder.onerror = (event: any) => {
+      mediaRecorder.onerror = (event: RecorderErrorEvent) => {
         console.error('MediaRecorder error:', event);
         stopVoiceRecording(true);
       };

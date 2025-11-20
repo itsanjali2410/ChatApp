@@ -1,6 +1,6 @@
 // Custom hook for handling WebSocket messages
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef } from 'react';
 import type { Message, Chat, User, SeenByUser } from '../types/chat';
 import type { WebSocketSendMessage } from '../types/websocket';
 import { markMessagesAsDelivered } from '../utils/api';
@@ -23,8 +23,19 @@ export const useWebSocketMessages = (
   sendWSMessageRef: React.MutableRefObject<WebSocketSendMessage | null>,
   setLastMessageStatus?: React.Dispatch<React.SetStateAction<{ [chatId: string]: { status: string; seen_at?: string } }>>
 ) => {
+  const lastNotificationKeyRef = useRef<string | null>(null);
   const handleWebSocketMessage = useCallback(async (event: MessageEvent) => {
-    const data = JSON.parse(event.data);
+    let data: any;
+    try {
+      data = JSON.parse(event.data);
+    } catch (error) {
+      console.error('Failed to parse WebSocket message', error);
+      return;
+    }
+
+    if (!data?.type) {
+      return;
+    }
 
     if (data.type === "new_message") {
       const newMessage: Message = {
@@ -78,6 +89,13 @@ export const useWebSocketMessages = (
 
       // Show notification for messages from others - ALWAYS show notifications even if chat is open
       if (data.sender_id !== myId) {
+        const notificationKey =
+          data.id || data.message_id || `${data.chat_id}-${data.timestamp}`;
+        if (notificationKey === lastNotificationKeyRef.current) {
+          return;
+        }
+        lastNotificationKeyRef.current = notificationKey;
+
         const chatName = isGroupChat ? (chat?.group_name || 'Group Chat') : senderName;
 
         await markMessagesAsDelivered(data.chat_id).catch(() => { });

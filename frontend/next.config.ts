@@ -4,7 +4,15 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // Enable service worker and PWA support
+  output: 'export',
+  distDir: 'out',
+  images: {
+    unoptimized: true,
+  },
+  trailingSlash: true,
+  experimental: {
+    serverMinification: true,
+  },
   async headers() {
     return [
       {
