@@ -148,14 +148,22 @@ export default function TicketDetailsPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-8">
-        <div className="flex justify-between items-start">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
           <div>
-            <button
-              onClick={() => router.push('/tickets')}
-              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mb-4"
-            >
-              ← Back to Tickets
-            </button>
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              <button
+                onClick={() => router.push('/tickets')}
+                className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+              >
+                ← Back to Tickets
+              </button>
+              <button
+                onClick={() => router.push('/chat')}
+                className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1"
+              >
+                💬 Go to Chat
+              </button>
+            </div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{ticket.name}</h1>
             <p className="text-gray-500 dark:text-gray-400">Case ID: {ticket.id}</p>
           </div>
